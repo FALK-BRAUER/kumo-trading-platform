@@ -1,0 +1,48 @@
+# Paper stack for one instance. Every port, volume and project name comes from the instance env file
+# (`make up INSTANCE=<name>`); nothing here has a default that could be mistaken for a real instance.
+name: kumo-${INSTANCE:?INSTANCE is required}
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: kumo
+      POSTGRES_USER: kumo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?resolved from the secrets manifest}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    env_file:
+      - ../instances/${INSTANCE}/instance.env
+    environment:
+      KUMO_BIND_HOST: 0.0.0.0
+      KUMO_INSTANCE_DIR: /instance
+    volumes:
+      - ../instances/${INSTANCE}:/instance:ro
+    ports:
+      - "${KUMO_API_PORT:?}:8000"
+    depends_on: [redis, postgres]
+
+  ui:
+    build:
+      context: ../ui
+      dockerfile: ../deploy/Dockerfile.ui
+    environment:
+      NEXT_PUBLIC_API_BASE: http://127.0.0.1:${KUMO_API_PORT:?}
+    ports:
+      - "${KUMO_UI_PORT:?}:3000"
+    depends_on: [backend]
+
+volumes:
+  redis-data:
+  pg-data:

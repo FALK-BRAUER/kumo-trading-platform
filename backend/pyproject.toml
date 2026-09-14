@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kumo-trading-platform-backend"
+version = "0.1.0"
+description = "FastAPI + NautilusTrader backend for the kumo-trading-platform trading UI"
+readme = "README.md"
+license = "LGPL-3.0-or-later"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "nautilus_trader==1.229.0",
+    "redis",
+    "jsonschema>=4",
+    "tzdata",
+    "kumo-trading-strategies>=0.1.0",
+]
+
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn[standard]", "websockets"]
+alpaca = ["aiohttp"]
+db = ["sqlalchemy[asyncio]>=2.0", "asyncpg>=0.29", "alembic"]
+dev = ["pytest>=8", "pytest-asyncio", "ruff>=0.5", "mypy>=1.10", "pre-commit"]
+
+[tool.setuptools.packages.find]
+include = ["api*", "adapters*", "actions*", "config*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"

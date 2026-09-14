@@ -1,0 +1,16 @@
+# Market-data feed config — provider-agnostic. `[data].provider` names which Nautilus DataClient is
+# registered; downstream sees only Nautilus Bars. Secrets never live here: the provider table holds
+# the env-var NAME (api_key_env); the value is injected at launch.
+
+[data]
+provider = "alpaca"
+bar_spec = "1-MINUTE-LAST"
+
+[providers.alpaca]
+api_key_env = "ALPACA_API_KEY"
+api_secret_env = "ALPACA_API_SECRET"
+feed = "iex"
+
+[providers.ibkr]
+host_env = "TWS_HOST"
+port_env = "TWS_PORT"

@@ -1,0 +1,105 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bin/check-public-tree.sh",
+            "blocking": true
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd backend && uv run pytest -q -x 2>&1 | tail -3",
+            "blocking": true
+          }
+        ]
+      },
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd ui && npm test --if-present 2>&1 | tail -3",
+            "blocking": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write(*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ruff format \"$file\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd ui && npx --no-install prettier --write \"$file\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd ui && npx --no-install prettier --write \"$file\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*/api/*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Hint: backend API changed \u2014 regenerate the TS client (cd ui && npm run gen:api)'",
+            "blocking": false
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.test.ts)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reminder: run the test you just wrote and watch it fail before the fix'",
+            "blocking": false
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*.test.tsx)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reminder: run the test you just wrote and watch it fail before the fix'",
+            "blocking": false
+          }
+        ]
+      },
+      {
+        "matcher": "Write(*/test_*.py)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reminder: run the test you just wrote and watch it fail before the fix'",
+            "blocking": false
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../backend/config/schema/strategies.json",
+  "strategies": [
+    { "id": "REFERENCE-001", "class": "kumo_strategies.strategies.reference.ReferenceRotation", "enabled": false }
+  ]
+}
