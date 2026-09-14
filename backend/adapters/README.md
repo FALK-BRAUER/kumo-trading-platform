@@ -1,6 +1,8 @@
 # adapters/
 
-Glue between the platform and the venue adapters it pins (Nautilus IB, kumo-nautilus-alpaca-adapter).
+Custom NautilusTrader adapters living out-of-tree (so the engine is never forked). Implements Nautilus's
+adapter interface — data/execution clients + instrument providers — registered with the node at runtime.
 
-- **Goes in:** provider registry entries and thin wiring, each naming the package it wires
-- **Stays out:** adapter implementations — a full adapter is its own package
+Planned: IBKR OAuth Web API adapter (gateway-free `api.ibkr.com`), built only if first-party OAuth self-service
+works on the Pro account (gate = kumo-trader#787). Until then the built-in Nautilus IBKR adapter (IB Gateway,
+ibapi) is used directly — no code here. Does NOT hold: strategy logic (→ `strategies/`).

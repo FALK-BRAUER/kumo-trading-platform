@@ -1,12 +1,54 @@
-FROM node:22-alpine AS build
+# UI image (#21) — Next.js standalone build. NEXT_PUBLIC_* are inlined at BUILD time, so each stack
+# builds its own image with its own API/WS base + env badge (paper vs live). Passed as build args.
+FROM node:20-slim AS build
 WORKDIR /app
+
+ARG NEXT_PUBLIC_API_BASE
+ARG NEXT_PUBLIC_WS_BASE
+ARG NEXT_PUBLIC_ENV=paper
+# The API port of THIS instance. Default 8000 keeps every existing build identical; a second instance
+# on the same host (staging-ibkr, API 8010) must not resolve to the first instance's API.
+ARG NEXT_PUBLIC_API_PORT
+ARG NEXT_PUBLIC_INSTANCE
+# Deterministic build id (git SHA) → Next stamps it into the /_next/<buildId>/ asset paths (cache-bust per
+# deploy). Also exposed to the client so the running build is visible in the UI.
+ARG BUILD_ID
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
+    NEXT_PUBLIC_WS_BASE=$NEXT_PUBLIC_WS_BASE \
+    NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV \
+    NEXT_PUBLIC_API_PORT=$NEXT_PUBLIC_API_PORT \
+    NEXT_PUBLIC_INSTANCE=$NEXT_PUBLIC_INSTANCE \
+    BUILD_ID=$BUILD_ID \
+    NEXT_PUBLIC_BUILD_ID=$BUILD_ID
+
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN mkdir -p public && npm run build
 
-FROM node:22-alpine
+FROM node:20-slim AS run
 WORKDIR /app
-COPY --from=build /app ./
+# Name the commit in the FINAL image (#329, extended #354). `BUILD_ID` already reaches the app for
+# cache-busting, but nothing outside the running page could answer "which UI is deployed" —
+# `verify-stamp-paper` checked engine and api and skipped the ui entirely, so a stale frontend was the one
+# stale artefact the deploy check could not see. An image timestamp is not an answer: rebuilding an old
+# commit produces a new timestamp and the same code.
+#
+# Declared HERE, in the run stage, not in `build`. ARG and LABEL are both stage-scoped: stamping the build
+# stage produced a final image with an EMPTY revision label, which `verify-stamp-paper` reported as a
+# mismatch against a UI that was in fact current — the same cry-wolf this change exists to remove.
+ARG BUILD_ID
+LABEL org.opencontainers.image.revision=$BUILD_ID
+# EXPORTED, not just labelled (#345 item 5). The label answers "which image is this" from the outside;
+# the RUNNING server needs to answer "which build am I serving" to a browser that may be executing an
+# older bundle. Verified 2026-08-21 on the deployed image: `BUILD_ID` was empty in the container and only
+# `/app/.next/BUILD_ID` had the value. `/api/build` reads the env first and falls back to that file, so
+# it works on images built before this line — but the env is the cheaper and more explicit answer.
+ENV NODE_ENV=production \
+    BUILD_ID=$BUILD_ID
+# Standalone output bundles only what's needed to run.
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

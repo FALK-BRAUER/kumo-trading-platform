@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Strategy budgets",
+  "description": "How much capital each strategy may hold. Intent only — changing a number moves nothing. Allocation shifts as fills free or commit capital, so a growing strategy can only deploy what a shrinking one has sold. Zero means wind down.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "TRANSFER_TO": {
+      "type": "string",
+      "default": "",
+      "title": "Hand freed capital to",
+      "description": "Strategy id that receives capital as an over-budget strategy sells. Empty means freed capital returns to unallocated rather than to any strategy."
+    },
+    "MANUAL-001": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "title": "MANUAL — discretionary clicks",
+      "description": "Discretionary trades. MANUAL is always live and ungated, so this measures the sleeve rather than limiting it."
+    },
+    "MOMENTUM-002": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "title": "MOMENTUM — daily systematic rotation",
+      "description": "Daily candidate-pool rotation. Sizing is per position, so this bounds the sleeve, not the position count."
+    },
+    "BCTROT-004": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "title": "BCTROT — BCT rotation, midday and close",
+      "description": "Same pool and rules as MOMENTUM, decided at midday and near the close instead of after the open. Runs alongside it and takes over gradually as MOMENTUM sheds positions."
+    },
+    "QC345-003": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "title": "QC345 — monthly top-down rotation",
+      "description": "Monthly rotation. Capital granted here stays idle until the next rebalance day and until it covers a whole position. Needs 254 sessions of history before deciding anything."
+    },
+    "QC345_UNIVERSE": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "title": "QC345 ranking universe",
+      "description": "Symbols QC345 ranks across. Empty blocks startup when QC345 is enabled — it ranks cross-sectionally, so an empty universe can never produce a decision."
+    },
+    "QC345_ENABLED": {
+      "type": "boolean",
+      "default": false,
+      "title": "Register QC345",
+      "description": "Register QC345-003 on the node. Registering is not trading — the lifecycle state decides that, and only an operator can set TRADING."
+    },
+    "QC345_UNIVERSE_REFRESH": {
+      "type": "boolean",
+      "default": false,
+      "title": "Refresh QC345 universe daily",
+      "description": "Rebuild the ranking universe from Alpaca once a day and write it below. Takes about six minutes in the background. Off means the list stays exactly as typed."
+    },
+    "MOMENTUM-002_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "title": "MOMENTUM — decision times",
+      "description": "When this strategy decides, relative to the US session — e.g. `open+5m`, `close-20m`. Built-in: `open+5m`. Empty uses the built-in. Applies on the next engine restart; no rebuild needed."
+    },
+    "MOMENTUM_N_HOLD": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "title": "MOMENTUM — names held (override)",
+      "description": "Names MOMENTUM-002 holds at once. Absent = the researched value in strategies/momentum.py (no schema default; the code is the source). Steers MOMENTUM-002 only (#794)."
+    },
+    "MOMENTUM_BUFFER": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "title": "MOMENTUM — ranking buffer (override)",
+      "description": "Ranks a held name may slip below the hold rank before it is sold. Absent = the researched value in strategies/momentum.py. Steers MOMENTUM-002 only (#794)."
+    },
+    "MOMENTUM_GIVE_BACK_FRAC": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "MOMENTUM — give-back exit fraction (override)",
+      "description": "Exit once a position has surrendered this fraction of its peak gain (0.35 = 35%; 1 = exit only at flat). 0 is refused: the lane reads 0 as OFF. Absent = the researched value in strategies/momentum.py. Steers MOMENTUM-002 only (#794); ks#221's knob (#1054)."
+    },
+    "MOMENTUM_TAKE_PROFIT_ATR": {
+      "type": "number",
+      "minimum": 3.0,
+      "maximum": 10.0,
+      "title": "MOMENTUM — take-profit target (× ATR, override)",
+      "description": "Sell in strength once a position is this many ATR above entry (4.5 = ks#221). Absent = OFF, today's behaviour; no researched value. Floor 3.0: the lab's grid never went below 3.25 and < 3 ATR costs ~9pp. Steers MOMENTUM-002 only (#794); #1055."
+    },
+    "BCTROT-004_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "title": "BCTROT — decision times",
+      "description": "When this strategy decides, relative to the US session — e.g. `open+5m`, `close-20m`. Built-in: `open+150m`, `close-20m`. Empty uses the built-in. Applies on the next engine restart; no rebuild needed."
+    },
+    "BCTROT_N_HOLD": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "title": "BCTROT — names held (override)",
+      "description": "Names BCTROT-004 holds at once. Absent = the researched value in strategies/momentum.py (no schema default; the code is the source). Steers BCTROT-004 only (#794)."
+    },
+    "BCTROT_BUFFER": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "title": "BCTROT — ranking buffer (override)",
+      "description": "Ranks a held name may slip below the hold rank before it is sold. Absent = the researched value in strategies/momentum.py. Steers BCTROT-004 only (#794)."
+    },
+    "BCTROT_GIVE_BACK_FRAC": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "BCTROT — give-back exit fraction (override)",
+      "description": "Exit once a position has surrendered this fraction of its peak gain (0.35 = 35%; 1 = exit only at flat). 0 is refused: the lane reads 0 as OFF. Absent = the researched value in strategies/momentum.py. Steers BCTROT-004 only (#794); ks#221's knob (#1054)."
+    },
+    "BCTROT_TAKE_PROFIT_ATR": {
+      "type": "number",
+      "minimum": 3.0,
+      "maximum": 10.0,
+      "title": "BCTROT — take-profit target (× ATR, override)",
+      "description": "Sell in strength once a position is this many ATR above entry. NOT measured to help BCTROT alone (the lab: -1.3pp at 3.25 by itself) — set only with BCTROT_GIVE_BACK_FRAC 0.35, after MOMENTUM's read-back. Absent = OFF. Floor 3.0. #1055."
+    },
+    "QC345-003_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "title": "QC345 — decision times",
+      "description": "When this strategy decides, relative to the US session — e.g. `open+5m`, `close-20m`. Built-in: `open+5m` (one slot only). Empty uses the built-in. Applies on the next engine restart; no rebuild needed."
+    },
+    "TECHIVOL-005": {
+      "type": "number",
+      "default": 0,
+      "description": "TECHIVOL-005 (QC27) budget allocation in USD. Research sized the book at 20000.",
+      "minimum": 0,
+      "title": "Tech IVol — budget"
+    },
+    "TECHIVOL-005_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "description": "When this strategy decides, relative to the US session. Built-in: `open+150m` (midday, one slot only) — chosen because the median charged spread falls 11.09 to 3.80 bps/leg versus the open. Empty uses the built-in. Applies on the next engine restart.",
+      "title": "Tech IVol — decision times"
+    },
+    "QC27_ENABLED": {
+      "type": "boolean",
+      "default": false,
+      "description": "Register TECHIVOL-005 in the node. An absent lifecycle row means TRADING, so this flag is the last gate, not the first of two."
+    },
+    "QC27_UNIVERSE": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "AAOI",
+        "AAPL",
+        "ADBE",
+        "ADI",
+        "ADP",
+        "ADSK",
+        "AEIS",
+        "ALAB",
+        "AMAT",
+        "AMD",
+        "AMKR",
+        "APH",
+        "APLD",
+        "APP",
+        "AVGO",
+        "AXTI",
+        "BBAI",
+        "CDNS",
+        "COHR",
+        "CRDO",
+        "CRM",
+        "CRWD",
+        "CRWV",
+        "CTSH",
+        "CW",
+        "DDOG",
+        "DELL",
+        "DOCN",
+        "DOCU",
+        "DT",
+        "DUOL",
+        "EMR",
+        "ENPH",
+        "EPAM",
+        "FDS",
+        "FIG",
+        "FORM",
+        "FSLR",
+        "FSLY",
+        "FTNT",
+        "GDDY",
+        "GE",
+        "GEV",
+        "GFS",
+        "GLD",
+        "GOOG",
+        "GOOGL",
+        "GWRE",
+        "HPE",
+        "HPQ",
+        "HUBB",
+        "HUBS",
+        "IBM",
+        "INTC",
+        "INTU",
+        "IONQ",
+        "IOT",
+        "JBL",
+        "JKHY",
+        "KLAC",
+        "LDOS",
+        "LRCX",
+        "LSCC",
+        "MCHP",
+        "MDB",
+        "META",
+        "MPWR",
+        "MRVL",
+        "MSFT",
+        "MSI",
+        "MSTR",
+        "MTSI",
+        "MU",
+        "MXL",
+        "NET",
+        "NOW",
+        "NTAP",
+        "NTNX",
+        "NVDA",
+        "NVTS",
+        "NXT",
+        "OKTA",
+        "ON",
+        "ONDS",
+        "ORCL",
+        "OTIS",
+        "P",
+        "PANW",
+        "PATH",
+        "PAYC",
+        "PENG",
+        "PINS",
+        "PL",
+        "PLTR",
+        "Q",
+        "QBTS",
+        "QCOM",
+        "QUBT",
+        "RBLX",
+        "RBRK",
+        "RCAT",
+        "RDDT",
+        "RGTI",
+        "RMBS",
+        "SBET",
+        "SITM",
+        "SMCI",
+        "SMTC",
+        "SNAP",
+        "SNDK",
+        "SNOW",
+        "SNPS",
+        "SNX",
+        "SOUN",
+        "STRC",
+        "SWKS",
+        "TEM",
+        "TOST",
+        "TTD",
+        "TTMI",
+        "TTWO",
+        "TWLO",
+        "TXN",
+        "TYL",
+        "U",
+        "VEEV",
+        "VIAV",
+        "VRSK",
+        "VRSN",
+        "VRT",
+        "VSH",
+        "WDAY",
+        "WDC",
+        "WOLF",
+        "XYZ",
+        "ZETA",
+        "ZM",
+        "ZS"
+      ],
+      "description": "Tech candidate pool for TECHIVOL-005. Defaulted, not empty: QC27 cannot derive sector membership live. The strategy still applies its own liquidity and momentum filters, so this is the candidate pool, not the book."
+    },
+    "CRSISHORT-006": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "title": "CRSI short — budget",
+      "description": "CRSISHORT-006 budget allocation in USD. Research sized the book at 20 slots of 5%; the sleeve is 100% deployed SHORT when full."
+    },
+    "CRSISHORT-006_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "title": "CRSI short — decision times",
+      "description": "When this strategy decides, relative to the US session. Built-in: `open+5m` (one slot). Empty uses the built-in. Applies on the next engine restart."
+    },
+    "CRSI_ENABLED": {
+      "type": "boolean",
+      "default": false,
+      "description": "Register CRSISHORT-006 in the node. Registered is SHADOW-only until kumo-strategies#131 lands: it journals its intent and submits nothing. Requires an IBKR data feed (split-adjusted bars) and either a shortable provider (#857) or CRSI_BORROW_GATE_OFF."
+    },
+    "CRSI_UNIVERSE": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "title": "CRSI short — universe",
+      "description": "The candidate names the lane subscribes and screens (prev-day dollar volume, price, 100-session vol, ConnorsRSI are applied INSIDE the strategy). Refreshed by a job, not typed by hand; the lane also subscribes what it still holds."
+    },
+    "CRSI_MIN_WARM_SYMBOLS": {
+      "type": "integer",
+      "default": 400,
+      "minimum": 1,
+      "title": "CRSI short — minimum warm names",
+      "description": "How many universe names must carry a full 102-session history before the lane may decide. Signalling on twenty warm names out of hundreds is a different, narrower strategy than the one measured."
+    },
+    "CRSI_ACCEPT_EXTENDED_DAILY_BARS": {
+      "type": "boolean",
+      "default": false,
+      "description": "Let CRSISHORT-006 run on a feed whose DAILY bars fold pre/post-market in (IBKR declares `extended`). The strategy was measured on regular-hours daily bars; this is a STATED deviation, logged at every boot. Default false: the builder refuses."
+    },
+    "CRSI_BORROW_GATE_OFF": {
+      "type": "boolean",
+      "default": false,
+      "description": "Turn the locate-fee ceiling OFF for CRSISHORT-006 because this node has no shortable data. A MEASURED change: #123's acceptance run set no fee gate. Record it in the instance RUNBOOK. Ignored when a shortable provider (#857) is present."
+    },
+    "MARKET_AWARE_DWELL_POLLS": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "title": "Market-aware — emergency dwell (polls)",
+      "description": "Consecutive polls on which emergency_exit must answer yes before EMERGENCY is reported (phase 1 reports only; nothing acts). An unknown or raising poll breaks the streak. Applies on the next engine restart."
+    },
+    "MARKET_AWARE_POLL_SECS": {
+      "type": "integer",
+      "minimum": 10,
+      "default": 60,
+      "title": "Market-aware — poll cadence (seconds)",
+      "description": "How often the engine asks each registered lane's entries_blocked, emergency_exit and self_assessment hooks. Applies on the next engine restart."
+    },
+    "SMHGLD_ENABLED": {
+      "type": "boolean",
+      "default": false,
+      "title": "SMHGLD — register",
+      "description": "Register SMHGLD-007 in the node (kumo-strategies#177, cockpit#965). Off by default, no environment gate. Registers SHADOW; an operator moves it to TRADING. Requires kumo-strategies >= 06f3055."
+    },
+    "SMHGLD_SYMBOLS": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "SMH",
+        "GLD"
+      ],
+      "title": "SMHGLD — legs",
+      "description": "The two legs, risk asset then defensive asset. Must equal the upstream config's risk_asset/defensive_asset; the builder refuses anything else by name."
+    },
+    "SMHGLD-007": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "title": "SMHGLD — budget",
+      "description": "SMHGLD-007 budget in USD. Zero reads UNFUNDED and refuses buys. Whole shares put a floor on a usable sleeve (~226k at a 0.25pp band, SMH ~565; kumo-strategies#186) — set by the coordinator after that answer."
+    },
+    "SMHGLD-007_SLOTS": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(open|close)[+-][0-9]{1,3}m$"
+      },
+      "default": [],
+      "title": "SMHGLD — decision times",
+      "description": "When this strategy decides, relative to the US session. Built-in: `close-20m` (one slot; the fill is market-on-close at 16:00). Empty uses the built-in. Applies on the next boot."
+    }
+  }
+}

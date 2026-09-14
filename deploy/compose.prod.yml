@@ -1,0 +1,133 @@
+# PROD (LIVE) stack (#21) — hardwired to the IBKR LIVE environment via the secondary user. Isolated
+# compose project (kumo-prod): own networks + volumes + ports; distinct from paper, runs side by side.
+# Launch:  make up-prod   (types LIVE to confirm, loads deploy/.env.prod)
+# REAL MONEY. The cockpit submits no orders; this connects for positions + data (read). No mode flag —
+# this file IS the live environment; paper config can never reach it.
+name: kumo-prod
+
+networks:
+  bus:      # redis <-> engine <-> api
+  broker:   # engine <-> ib-gateway ONLY — the order-capable LIVE gateway is unreachable from api/ui
+
+volumes:
+  pgdata:   # Postgres app-data persistence (watchlists etc.)
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [bus]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # Same policy as its dependents: Docker restarting containers on its own ignores depends_on, so a
+    # policy-less store stays down while the api comes back up without it.
+    restart: unless-stopped
+
+  # App-data store. Password injected from .env.prod (never hardcoded on the live stack).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kumo
+      POSTGRES_PASSWORD: ${KUMO_PG_PASSWORD}
+      POSTGRES_DB: kumo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [bus]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kumo -d kumo"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable   # PIN A DIGEST before running live money
+    environment:
+      TWS_USERID: ${TWS_USERID}       # LIVE secondary user (deploy/.env.prod)
+      TWS_PASSWORD: ${TWS_PASSWORD}
+      TRADING_MODE: live
+      READ_ONLY_API: "no"             # reconciliation handshake (IB 321). No order path is built on live.
+    networks: [broker]                # NO host port — the order-capable live gateway is engine-only
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/4001' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 90s               # live IBC login (may involve 2FA/trusted-IP)
+    restart: unless-stopped
+
+  engine:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+    # Wait for the schema, do not apply it (#205) — see the note on the paper stack. Real money here,
+    # so the same race would land on a path holding real positions with no paper safety net.
+    command: ["sh", "-c", "python -m api.db.await_schema && exec python -m api.engine_node"]
+    environment:
+      DATABENTO_API_KEY: ${DATABENTO_API_KEY}
+      IBKR_ACCOUNT_ID: ${IBKR_ACCOUNT_ID}     # LIVE account id
+      KUMO_EXEC: ibkr
+      KUMO_REDIS_HOST: redis
+      # Required by the schema gate above. Without it `database_url()` falls back to localhost:5432,
+      # which inside this container is nothing at all — and the gate waits forever by design, so the
+      # prod engine would never start. The paper engine already carried this; prod did not.
+      KUMO_DATABASE_URL: postgresql+asyncpg://kumo:${KUMO_PG_PASSWORD}@postgres:5432/kumo
+      KUMO_IBG_HOST: ib-gateway
+      KUMO_IBG_PORT: "4001"
+      # Node boot timeouts (#954) — same defaults as paper and as the code; see compose.paper.yml.
+      KUMO_CONNECTION_TIMEOUT_S: ${KUMO_CONNECTION_TIMEOUT_S:-180}
+      KUMO_RECONCILIATION_TIMEOUT_S: ${KUMO_RECONCILIATION_TIMEOUT_S:-120}
+    networks: [bus, broker]
+    depends_on:
+      redis:
+        condition: service_healthy
+      # The schema gate reads Postgres before the node starts, so waiting for it here turns a noisy
+      # retry loop into a clean start. Healthy is still not MIGRATED — that is what the gate is for.
+      postgres:
+        condition: service_healthy
+      ib-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+    command: ["sh", "-c", "python -m api.db.migrate && exec python -m api"]
+    environment:
+      KUMO_ENGINE: live
+      KUMO_REDIS_HOST: redis
+      KUMO_REDIS_PORT: ${KUMO_REDIS_PORT:-6379}
+      KUMO_DATABASE_URL: postgresql+asyncpg://kumo:${KUMO_PG_PASSWORD}@postgres:5432/kumo
+      # Read by THIS process (`app.py::_inert_contradictions`), not just by the engine — see the
+      # note on the paper compose. Defaults carry the code's own defaults so forwarding the var
+      # changes no behaviour on its own: compose interpolates an UNSET variable to the EMPTY STRING,
+      # and `os.environ.get(k, default)` then returns "" rather than the default (#581).
+      KUMO_ORDERS_ARMED: "${KUMO_ORDERS_ARMED:-false}"
+      KUMO_CORS_ORIGINS: ${KUMO_CORS_ORIGINS:-*}
+    networks: [bus]
+    ports:
+      - "127.0.0.1:8001:8000"   # LIVE data — loopback only (unauthenticated WS; do not expose off-host)
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ../ui
+      dockerfile: ../deploy/Dockerfile.ui
+      args:
+        NEXT_PUBLIC_API_BASE: "http://localhost:8001"   # loopback (host-only) — live is not exposed to LAN
+        NEXT_PUBLIC_WS_BASE: "ws://localhost:8001"
+        NEXT_PUBLIC_ENV: "live"                         # → red LIVE badge, always visible
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - api
+    restart: unless-stopped

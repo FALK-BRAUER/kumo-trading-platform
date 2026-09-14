@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Notifications",
+  "description": "Telegram alerts for conditions that need attention and would otherwise only appear on screen.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "title": "Send Telegram alerts",
+      "description": "Off by default, per the rule that all new automation gates start False. Turning this on without credentials in the environment changes nothing — the notifier reports itself unconfigured rather than failing a session."
+    },
+    "telegram_account": {
+      "type": "string",
+      "default": "fintrack",
+      "title": "Telegram account",
+      "description": "Which bot to send as. The account name maps to {UPPER}_TELEGRAM_BOT_TOKEN and {UPPER}_TELEGRAM_CHAT_ID in the environment, hyphens stripped."
+    },
+    "notify_strategy_degraded": {
+      "type": "boolean",
+      "default": true,
+      "title": "Strategy stopped entering",
+      "description": "Alert when a strategy is configured with an exit rule the live runner cannot honour. It suppresses new entries while still exiting, and the lifecycle still reads TRADING."
+    },
+    "notify_reconcile_drift": {
+      "type": "boolean",
+      "default": true,
+      "title": "Broker/cockpit position drift",
+      "description": "The cockpit and the broker disagree about what is held, in either direction. Shown in the UI already, but drift that appears while nobody is looking at the screen is exactly the case worth pushing."
+    },
+    "notify_split_divergence": {
+      "type": "boolean",
+      "default": true,
+      "title": "Per-lane split disagrees with the claims ledger",
+      "description": "The engine cache and the claims ledger disagree about WHICH lane holds a position's shares while the totals can agree. An exit sized off the claim sells another lane's shares under NETTING (the BDX incident, #692)."
+    },
+    "notify_unreconciled_order": {
+      "type": "boolean",
+      "default": true,
+      "title": "Reconciliation skipped an order",
+      "description": "An order at the broker could not be represented (e.g. a dollar-based order) and was skipped so the batch survived. The engine keeps trading, but that order's reserved shares and protection are not being counted."
+    },
+    "notify_short_violation": {
+      "type": "boolean",
+      "default": true,
+      "title": "A short in a long-only lane",
+      "description": "A strategy holds a negative quantity, which nothing here is permitted to do. Usually a closing sell attributed to the wrong owner, stranding a mirrored long in a sibling lane. The netted book still matches the broker, so the banner will not show it."
+    },
+    "notify_terminal_fill": {
+      "type": "boolean",
+      "default": true,
+      "title": "Fill on a terminal order",
+      "description": "Page when a fill arrives for an order the cache holds terminal (REJECTED/CANCELED) — the second the position plane starts diverging from the order plane (#807)."
+    },
+    "notify_external_position": {
+      "type": "boolean",
+      "default": true,
+      "title": "A position no strategy claims",
+      "description": "A non-flat position is booked under EXTERNAL, so no strategy claims it. Usually a reconciliation-generated phantom (#635); adopting a phantom SHORT makes the exit path BUY, doubling a real long at market."
+    },
+    "notify_pool_unlisted": {
+      "type": "boolean",
+      "default": true,
+      "title": "Pool carries a symbol the venue does not list",
+      "description": "A symbol in the composed pool has no asset in the venue catalog, so the ranking can select it and the lane will then silently not trade it. Reported once per symbol; the sweep never edits the pool."
+    },
+    "notify_engine_down": {
+      "type": "boolean",
+      "default": true,
+      "title": "Engine or data bus offline",
+      "description": "Always sent. The stack was down for 2d18h on 6–9 Aug 2026 with nothing to announce it, and a whole trading session was missed."
+    },
+    "repeat_after_hours": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 168,
+      "default": 12,
+      "title": "Repeat an ongoing condition after (hours)",
+      "description": "How long before an unresolved condition is announced again. Too short is noise; too long and a real condition goes quiet."
+    },
+    "notify_daily_digest": {
+      "type": "boolean",
+      "default": true,
+      "title": "Daily account summary",
+      "description": "One end-of-day summary of what the strategies did."
+    },
+    "notify_stranded_claim": {
+      "type": "boolean",
+      "default": true,
+      "title": "A position no lane can sell",
+      "description": "Two lanes claim the same shares, so each one's sell size is capped at the account minus the other's claim and both floor to zero. The shares are unreachable on every path including liquidating, and the lanes keep sizing against a holding they cannot act on."
+    },
+    "notify_market_aware": {
+      "type": "boolean",
+      "default": true,
+      "title": "Market-aware protocol events",
+      "description": "Alert when a lane's market view or self-assessment changes state: entries blocked or unblocked, emergency (critical), stand-down, a hook answering unknown twice, a hook raising. Observes only; nothing behind it places an order."
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# Local dev infra for kumo-cockpit. Loopback-only, no auth — never expose these ports off the host.
+#
+#   docker-compose up -d redis     # Nautilus MessageBus external-streaming backbone (issue #19, Option B)
+#
+# Redis carries the trading node's serialized domain events (bars/quotes/positions/orders) to the separate
+# UI consumer process. Postgres (app state + watchlists) joins here when that store lands — see the
+# storage-architecture memory.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: kumo-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]  # ephemeral: streams are a live bus, not storage
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

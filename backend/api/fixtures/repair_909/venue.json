@@ -1,0 +1,10 @@
+{
+ "orders": {},
+ "positions": [
+  {
+   "symbol": "GLD",
+   "qty": "62",
+   "side": "long"
+  }
+ ]
+}

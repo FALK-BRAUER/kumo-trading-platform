@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# Start the API for one instance. Secrets are resolved by name from the manifest and injected as env;
-# values never touch a file.
+# Launch the kumo-cockpit UI process — the FastAPI/WebSocket server (issue #20).
+# This process holds NO Nautilus node and NO vendor secrets: it only reads the engine's Redis `ui:stream`
+# (see api/consumer.py) and serves the browser. Crash/restart it freely — the engine (run-engine.sh) is
+# untouched. Requires Redis up (docker-compose up -d redis); the engine process supplies the data.
+#
+# Usage:  backend/scripts/run-api.sh
 set -euo pipefail
-export KUMO_BIND_HOST="${KUMO_BIND_HOST:-127.0.0.1}"
-export KUMO_PORT="${KUMO_PORT:-8000}"
-exec uv run uvicorn api.app:app --host "$KUMO_BIND_HOST" --port "$KUMO_PORT"
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # backend/
+
+# shellcheck disable=SC1091
+source "$here/.venv/bin/activate"
+exec python -m api

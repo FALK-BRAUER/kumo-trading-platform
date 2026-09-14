@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alpaca",
+  "description": "Alpaca provider settings (non-secret only \u2014 API keys stay in the keychain/env, never here).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "feed": {
+      "type": "string",
+      "enum": [
+        "iex",
+        "sip"
+      ],
+      "default": "sip",
+      "title": "Market-data feed",
+      "description": "Market-data feed. SIP is the consolidated tape; IEX is a single venue with thinner quotes and wider spreads."
+    }
+  }
+}

@@ -1,48 +1,449 @@
-# Paper stack for one instance. Every port, volume and project name comes from the instance env file
-# (`make up INSTANCE=<name>`); nothing here has a default that could be mistaken for a real instance.
-name: kumo-${INSTANCE:?INSTANCE is required}
+# PAPER stack (#21) — hardwired to the IBKR paper environment. Isolated compose project (kumo-paper):
+# own networks + volumes + ports. Launch:  make up-paper   (loads deploy/.env.paper)
+# There is no mode flag — this file IS the paper environment. It can never reach the live account.
+name: kumo-paper
+
+networks:
+  bus:      # redis <-> engine <-> api (the UI data bus)
+  broker:   # engine <-> ib-gateway ONLY — keeps the order-capable gateway off the api/ui reach
+
+# VOLUME NAMES ARE PINNED, AND THAT IS A SAFETY PROPERTY RATHER THAN TIDINESS (#486).
+#
+# A bare `pgdata:` is named by docker as `<compose-project>_pgdata`. So the volume a stack reads is
+# decided by the PROJECT NAME — and changing a project name does NOT fail, error, or warn. Probed on
+# this stack:
+#
+#     docker run --rm -v kumo-test_settingsdata:/v alpine ls -la /v
+#     -> total 8   (empty)
+#
+# Docker CREATED IT SILENTLY AND EMPTY. Under a rename that is a fresh Postgres, an empty Nautilus
+# durable cache against open positions, and every setting gone — 5,071 bytes across 5 files, of which
+# `strategies.json` is 3,889 and holds every sleeve allocation, both universes, the slot schedules and
+# every enable flag. The first thing that would prove the rename wrong is an empty database.
+#
+# An explicit `name:` detaches the volume from the project, so the project may be renamed freely.
+#
+# IT IS A PARAMETER, NOT A LITERAL, and that distinction is the whole point. A fixed
+# `name: kumo-paper_pgdata` survives the rename and makes EVERY instance resolve to the SAME volume —
+# two stacks sharing one Nautilus cache and one settings file, which is worse than the problem it
+# solves. The prefix is per-instance; `test-alpaca` keeps `kumo-paper` forever precisely so its data
+# is never orphaned.
+#
+# DEFAULTS TO `kumo-paper` so this change is INERT on the current stack: same names, same volumes, no
+# migration. That is deliberate — this lands and is verified while the project is still `kumo-paper`,
+# so that a later rename cannot be the thing that tests it.
+volumes:
+  pgdata:          # Postgres app-data persistence (watchlists etc.) — survives container recreate
+    name: ${KUMO_VOLUME_PREFIX:-kumo-paper}_pgdata
+  settingsdata:    # settings framework (#49): per-domain JSON values — api writes, engine reads
+    name: ${KUMO_VOLUME_PREFIX:-kumo-paper}_settingsdata
+  redisdata:       # Nautilus durable cache (#74): orders/positions persist here — AOF-backed
+    name: ${KUMO_VOLUME_PREFIX:-kumo-paper}_redisdata
+  logdata:         # DURABLE ENGINE LOGS (#758). Docker's json-file driver keeps logs with the
+                   # CONTAINER, so `make up` destroyed every session's history on recreate — which is
+                   # why Friday could not be examined on Monday. Nautilus writes rotating JSON here
+                   # instead, and a volume survives recreate.
+    name: ${KUMO_VOLUME_PREFIX:-kumo-paper}_logdata
 
 services:
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    # AOF persistence ON so the Nautilus durable cache (orders/positions) survives a Redis/stack restart —
+    # not just an engine restart. Without this the "durable" cache is lost whenever Redis recycles.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
-      - redis-data:/data
+      - redisdata:/data
+    networks: [bus]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # Same policy as its dependents: Docker restarting containers on its own ignores depends_on, so a
+    # policy-less store stays down while the api comes back up without it.
+    restart: unless-stopped
 
+  # App-data store (watchlists now; more later — storage-architecture decision). NOT trade state (Nautilus)
+  # or bars (Parquet). Loopback-free: on the bus network, reachable only by the api process.
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: kumo
       POSTGRES_USER: kumo
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?resolved from the secrets manifest}
+      POSTGRES_PASSWORD: kumo   # paper-only, isolated network; prod injects a real secret via env
+      POSTGRES_DB: kumo
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    networks: [bus]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kumo -d kumo"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
-  backend:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.backend
-    env_file:
-      - ../instances/${INSTANCE}/instance.env
+  # Opt-in only (profile "ibkr"): the paper stack is gateway-free now that execution runs on Alpaca (#23).
+  # Re-enable IBKR reconciliation with `--profile ibkr` + set [execution].provider=ibkr / KUMO_EXEC=ibkr.
+  ib-gateway:
+    profiles: ["ibkr"]
+    image: ghcr.io/gnzsnz/ib-gateway:stable   # pin a digest before any live use
     environment:
-      KUMO_BIND_HOST: 0.0.0.0
-      KUMO_INSTANCE_DIR: /instance
+      TWS_USERID: ${TWS_USERID:-}
+      TWS_PASSWORD: ${TWS_PASSWORD:-}
+      TRADING_MODE: paper
+      READ_ONLY_API: "no"          # Nautilus reconciliation needs write handshake (IB error 321 otherwise)
+      # BOTH OF THESE ARE REQUIRED FOR AN ORDER TO REACH IB AT ALL, and unset they fail SILENTLY at the
+      # venue: IB answers `Order rejected - reason:Order was discarded.` and nothing upstream explains it.
+      # Measured 2026-08-24 on staging-ibkr — every order was discarded, both BCTROT-004's entries and a
+      # MANUAL flatten, while reconciliation kept working perfectly and the stack reported healthy.
+      #
+      # ALLOW_BLIND_TRADING is the one that actually bites this deployment. Data is ALPACA and execution
+      # is IBKR (#23), so the gateway holds NO market data for any contract it is asked to trade. IB
+      # refuses an order on a contract it cannot price unless blind trading is accepted — which for us
+      # is the normal case, not an edge case.
+      #
+      # BYPASS_WARNING fills IBC's `BypassOrderPrecautions`. Empty means IB raises a precaution dialog
+      # per order and IBC has no rule to answer it, so the order is discarded rather than refused.
+      ALLOW_BLIND_TRADING: "yes"
+      BYPASS_WARNING: "yes"
+      # NOT SET HERE ON PURPOSE, AND CHECKED (#815). The paper-account dialog is handled by IBC's
+      # `AcceptNonBrokerageAccountWarning=yes`, which the image already writes into config.ini from
+      # TRADING_MODE=paper — verified in the running staging2 container on 2026-09-09, along with
+      # IBC's own "Click button: I understand and accept" in its log. The 10141 disclaimer errors
+      # were NOT this setting being absent; see the healthcheck note below. Recorded so the next
+      # reader does not "fix" a setting that was never wrong and conclude the race is closed.
+    networks: [broker]             # no host port — only the engine reaches it, over the broker network
+    # PROBE THE PORT THE ENGINE ACTUALLY USES (#815). This tested 4002 — the Java gateway's inner API
+    # port — while the engine connects to `ib-gateway:${KUMO_IBG_PORT}` (4004), the socat forwarder.
+    # Those two listeners come up independently, so `service_healthy` could be satisfied by a port no
+    # client uses. A guard that recognises its subject by a neighbouring property is the shape this
+    # repo has paid for three times; both ports are probed now, inner first.
+    #
+    # THIS NARROWS THE RACE, IT DOES NOT CLOSE IT. Measured on staging2:
+    #   2026-09-08 23:45:06.827  engine connected
+    #   2026-09-08 23:45:06.915  engine: "Paper trading disclaimer must first be accepted" (10141) x4
+    #   2026-09-08 23:45:07.156  IBC:    "Click button: I understand and accept"
+    # The engine beat IBC's dialog by 0.33s and lost the next five minutes: 91 `Not connected (504)`,
+    # 139 disconnects, and 83 venue order reads failed with 0 successes. The next boot, same image and
+    # same config, was clean. `AcceptNonBrokerageAccountWarning=yes` is ALREADY set in the image's
+    # config.ini and IBC does click the dialog — this is not a missing option, it is a readiness
+    # signal that fires before the thing it signals. A real "IBC has finished" marker needs something
+    # the gnzsnz image does not emit (`launcher.log` switches to an ENCRYPTED log partway through
+    # login, checked in the running container 2026-09-09), so the remaining half stays open on #815
+    # and must be validated against a real gateway recreate rather than guessed at here.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/4002 && echo > /dev/tcp/localhost/${KUMO_IBG_PORT:-4004}' 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 60s            # IBC login takes time — measured 24s on 2026-09-09, 5s on 09-08
+    restart: unless-stopped
+
+
+  engine:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      additional_contexts:
+        # The LOCAL kumo-strategies checkout, not a git URL. The repo is private, so a git+https
+        # install inside the build has no credentials ("could not read Username for github.com")
+        # and pulling one in would mean plumbing a token through the build. For a paper stack the
+        # local tree is also the more useful source: what runs is what is checked out.
+        strategies: ../../kumo-strategies
+      args:
+        # Stamp the commit into the image (#329) — set by `make build-paper`/`up-paper`. Empty when
+        # someone runs `docker compose build` by hand, which the Dockerfile defaults to "unknown".
+        KUMO_GIT_SHA: ${KUMO_GIT_SHA:-unknown}
+        KUMO_STRATEGIES_SHA: ${KUMO_STRATEGIES_SHA:-unknown}
+    # Wait for the schema, do not apply it (#205). Migrations belong to the api; `postgres: healthy`
+    # below says the database is UP, not that it is MIGRATED, so without this the engine can select
+    # columns the api has not created yet — mid-session, on a path holding real positions.
+    command: ["sh", "-c", "python -m api.db.await_schema && exec python -m api.engine_node"]
+    # DOCKER MUST NOT KILL THE NODE MID-SHUTDOWN (#381). Default grace is 10s, which is shorter than the
+    # node's own disconnect budget alone (30s, `timeout_disconnection` in engine_node.py) — so on every
+    # `docker restart` or `up` the process was SIGKILLed while still closing in-flight broker requests,
+    # holding live positions. 60s covers disconnection (30) + post-stop (10) + shutdown (5) with room:
+    # this number must stay ABOVE that sum, and `test_shutdown_budget.py` fails if it stops being.
+    stop_grace_period: 60s
+    environment:
+      # DURABLE LOG DESTINATION (#758). A LITERAL, not `${KUMO_LOG_DIR}`: compose interpolates an
+      # unset variable to the EMPTY STRING, so `os.environ.get(k, default)` returns "" and the
+      # default never fires — the defect that made KUMO_DATA and KUMO_EXEC unreachable in #581.
+      # Empty here would leave file logging OFF while the volume sat mounted and looking correct.
+      KUMO_LOG_DIR: /var/log/kumo
+      # The tuning knobs, forwarded so an instance can actually set them. `:-` supplies the default
+      # when the variable is UNSET — unlike a bare `${VAR}`, which interpolates to the empty string
+      # and makes `os.environ.get(k, default)` return "" instead of the default (#581).
+      KUMO_LOG_LEVEL_FILE: ${KUMO_LOG_LEVEL_FILE:-INFO}
+      KUMO_LOG_FILE: ${KUMO_LOG_FILE:-engine}
+      KUMO_LOG_MAX_BYTES: ${KUMO_LOG_MAX_BYTES:-209715200}
+      KUMO_LOG_BACKUPS: ${KUMO_LOG_BACKUPS:-10}
+      # Age-based retention and the compaction cadence (#758). Nautilus rotates by SIZE and has no
+      # notion of days, so this is the only place a "keep N days" policy can be expressed.
+      KUMO_LOG_KEEP_DAYS: ${KUMO_LOG_KEEP_DAYS:-10}
+      KUMO_LOG_COMPACT_SECS: ${KUMO_LOG_COMPACT_SECS:-3600}
+      # PER-COMPONENT LEVELS (#758), e.g. "ExecEngine=DEBUG,MOMENTUM=TRACE". Nautilus's own field,
+      # previously unset. Boot-time only — its Logger exposes no level setter — so changing this
+      # needs a restart, same constraint as #759.
+      KUMO_LOG_COMPONENTS: ${KUMO_LOG_COMPONENTS:-}
+      # Alpaca is the active [data].provider (#23) — market data independent of the live IBKR account.
+      APCA_API_KEY_ID: ${APCA_API_KEY_ID}
+      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY}
+      DATABENTO_API_KEY: ${DATABENTO_API_KEY:-}   # only if [data].provider is switched back to databento
+      # Fundamentals (#182 follow-up, KPI Phase 2) — Financial Modeling Prep, INDEPENDENT of the
+      # [data].provider above (a Databento/IBKR data swap must not silently break fundamentals). Missing
+      # → self._fmp stays None, _refresh_fundamentals no-ops (no crash, just no fundamentals KPIs).
+      FMP_API_KEY: ${FMP_API_KEY:-}
+      # Operator alerts (#197). Non-secret behaviour — including WHICH bot to send as — lives in the
+      # `notifications` settings domain; only the credentials come from here. A container cannot read
+      # the macOS keychain, so the deploy exports these as the APCA pair is exported. Absent → the
+      # notifier reports itself unconfigured and drops alerts quietly; nothing fails.
+      # Default account is `fintrack`, so the cockpit's trading alerts land beside fintrack's rather
+      # than in a second channel to check. A dedicated `kumo` bot is a settings change plus its pair.
+      FINTRACK_TELEGRAM_BOT_TOKEN: ${FINTRACK_TELEGRAM_BOT_TOKEN:-}
+      FINTRACK_TELEGRAM_CHAT_ID: ${FINTRACK_TELEGRAM_CHAT_ID:-}
+      KUMO_TELEGRAM_BOT_TOKEN: ${KUMO_TELEGRAM_BOT_TOKEN:-}
+      KUMO_TELEGRAM_CHAT_ID: ${KUMO_TELEGRAM_CHAT_ID:-}
+      # Execution runs on Alpaca (REST, gateway-free). The following are only for a rollback to ibkr exec
+      # (run with `--profile ibkr` + KUMO_EXEC=ibkr); harmless/empty otherwise.
+      IBKR_ACCOUNT_ID: ${IBKR_ACCOUNT_ID:-}
+      KUMO_IBG_HOST: ${KUMO_IBG_HOST:-ib-gateway}
+      # gnzsnz socat port (gateway API binds 4002, trusts only 127.0.0.1). Parameterised with the
+      # same default: an instance pointing at its own gateway must not be silently overridden.
+      KUMO_IBG_PORT: "${KUMO_IBG_PORT:-4004}"
+      KUMO_REDIS_HOST: redis
+      # RECONCILIATION ESCAPE HATCH (#363). Comma-separated client order ids to skip at startup
+      # reconciliation. Empty by default. Set it only to unblock a node that cannot boot because a
+      # venue fill would overfill a cached order — the log names the order. Positions still reconcile
+      # from the broker, so the book comes back whole; remove the entry once the order has settled.
+      KUMO_RECONCILE_SKIP_COIDS: ${KUMO_RECONCILE_SKIP_COIDS:-}
+      # Node boot timeouts (#954). Defaults here EQUAL the code's (pinned by test_connection_timeout.py);
+      # unset in instance.env means these. Their sum + portfolio init must stay below the inert
+      # watchdog (330 s) — the engine refuses to boot otherwise, naming the variable.
+      KUMO_CONNECTION_TIMEOUT_S: ${KUMO_CONNECTION_TIMEOUT_S:-180}
+      KUMO_RECONCILIATION_TIMEOUT_S: ${KUMO_RECONCILIATION_TIMEOUT_S:-120}
+      # DISPLAY YIELDS TO TRADING at boot on a metered venue (#618 step 2). 0 = off (default);
+      # empty-string interpolation is handled engine-side ('or 0') per the #581 lesson.
+      KUMO_DISPLAY_BACKFILL_HOLD_SECS: ${KUMO_DISPLAY_BACKFILL_HOLD_SECS:-0}
+      # The account's actual opening balance (#651 item 7): unset = realized reconciliation
+      # DISABLED loudly; the engine refuses a malformed value at boot. Declared per instance.
+      ACCOUNT_BASELINE_EQUITY: ${ACCOUNT_BASELINE_EQUITY:-}
+      # Runtime watchlist (Postgres): the engine loads/streams symbols added at runtime, not just the config
+      # universe — else a watched symbol never gets bars/price.
+      KUMO_DATABASE_URL: postgresql+asyncpg://kumo:kumo@postgres:5432/kumo
+      # ARM order submission (#32/#5). THE INSTANCE DECIDES, and the default is OFF.
+      #
+      # This was a literal `"true"`, and a compose `environment:` literal WINS over `env_file` — so
+      # staging-ibkr, whose instance.env says `false`, came up ARMED against a live IB login on
+      # 2026-08-24. The instance definition was read, ignored, and nothing reported the difference.
+      # Only an unrelated crash-loop stopped it submitting. Every instance that wants orders to leave
+      # the process must now say so itself.
+      KUMO_ORDERS_ARMED: "${KUMO_ORDERS_ARMED:-false}"
+      # Persist orders/positions to Redis (#74) → survive restart, reconcile cleanly. Defaults ON,
+      # unlike the gates: it authorises no trading, and an instance losing it silently would reconcile
+      # against an empty cache. Parameterised so an instance can still turn it off deliberately.
+      KUMO_DURABLE_CACHE: "${KUMO_DURABLE_CACHE:-true}"
+      # End-of-day position observation (#734). TWO independent gates, and they must stay independent:
+      # CAPTURE writes one row per lane per day going forward; BACKFILL rewrites history in bulk on an
+      # operator's POST. An instance running the nightly capture has not thereby asked for its past to
+      # be rewritten.
+      #
+      # FORWARDED EXPLICITLY BECAUSE NOTHING ELSE DOES IT. This file has no `env_file` directive — the
+      # engine's environment is exactly this block — so a `KUMO_EOD_*` set in instance.env or the shell
+      # reaches nothing inside the container. That is #574/#581 exactly: a variable declared in the
+      # instance definition, listed in its README, and read by no running process, invisible because
+      # both sources AGREED at the default. Verify with `printenv` INSIDE the container, never by
+      # calling the function that reads it.
+      #
+      # `:-false` and not bare `${KUMO_EOD_CAPTURE}`: compose interpolates an UNSET variable to the
+      # EMPTY STRING, and `os.environ.get(k, default)` then returns "" rather than firing the default.
+      KUMO_EOD_CAPTURE: "${KUMO_EOD_CAPTURE:-false}"
+      KUMO_EOD_BACKFILL: "${KUMO_EOD_BACKFILL:-false}"
+      # MOMENTUM-001, the systematic rotation (kumo-strategies). Enabling this REGISTERS the strategy;
+      # it does not authorise trading. The lifecycle row in Postgres decides that, and only an
+      # operator can move it to TRADING — a freshly registered strategy computes and publishes and
+      # submits nothing. Paper only: never set on the prod stack without a deliberate decision.
+      KUMO_MOMENTUM_ENABLED: "${KUMO_MOMENTUM_ENABLED:-false}"
+      # Minutes after the OPEN to decide. 5 is the intended value and what the research assumes.
+      # Overridable so a session can be forced later in the day when the normal alert has already
+      # passed — needed to exercise the order path on the first live day rather than wait until the
+      # next morning to discover whether it works. Leave unset for normal operation.
+      KUMO_MOMENTUM_OPEN_OFFSET_MIN: ${KUMO_MOMENTUM_OPEN_OFFSET_MIN:-5}
+      # INFO, not WARNING. At WARNING the strategy logs nothing at all on a healthy run — no
+      # startup line, no session arm, no decision — so a silent log was equally consistent with
+      # "working", "stuck" and "dead", and telling them apart meant querying Postgres. INFO is
+      # affordable now that the UI-bridge drop warning is summarised instead of one line per
+      # frame (that alone was 98k lines per startup).
+      KUMO_LOG_LEVEL: ${KUMO_LOG_LEVEL:-INFO}
+      KUMO_SETTINGS_DIR: /data/settings   # settings framework (#49) — engine reads the alpaca feed here
+      # INSTANCE-OWNED CONFIG (#486). Unset = the platform's own defaults, so this is inert until a
+      # deployment chooses otherwise.
+      # PROVIDER SELECTION (#581). The instances Makefile exports these; without an entry HERE they
+      # never reach the process, and `printenv KUMO_DATA` was unset on BOTH engines on 2026-08-27
+      # while twenty other KUMO_* vars were present — so #574's override was unreachable and only
+      # feed.toml decided. Empty default on purpose: an unset variable must fall through to
+      # feed.toml, not force a provider.
+      KUMO_DATA: ${KUMO_DATA:-}
+      KUMO_EXEC: ${KUMO_EXEC:-}
+      KUMO_FEED_CONFIG: ${KUMO_FEED_CONFIG:-}
+      KUMO_CORS_ORIGINS: ${KUMO_CORS_ORIGINS:-*}
+      KUMO_BIND_HOST: ${KUMO_BIND_HOST:-0.0.0.0}
+      KUMO_SOURCES_DIR: ${KUMO_SOURCES_DIR:-}
     volumes:
-      - ../instances/${INSTANCE}:/instance:ro
+      - settingsdata:/data/settings:ro    # read-only: the engine consumes settings, only the api writes
+      # DURABLE, ROTATING ENGINE LOGS (#758). Written by Nautilus's own LoggingConfig — its
+      # log_directory/log_file_max_size/log_file_max_backup_count fields were all UNSET, so the
+      # engine wrote no file and every session's history died with the container on `make up`.
+      - logdata:/var/log/kumo
+      # fintrack's george book, READ-ONLY, mounted at the SAME absolute path it has on the host.
+      # The source resolves a host path, so inside the container the file simply did not exist and
+      # every refresh failed with "ledger not found" — which the runner treats as a hard block, so
+      # the session would have refused to decide. Mounting at the identical path means host-side
+      # tooling and the container read the same file with the same config, rather than needing two
+      # different csv_path values that can drift.
+      # THE HOST PATH IS THE INSTANCE'S, NOT THIS FILE'S (#1045): it names a directory on one operator's
+      # machine, and a compose file that ships must not. `:?` makes compose REFUSE to start when the
+      # instance did not declare it — a silent `/nonexistent` mount is how the market view read
+      # nothing for days (the KUMO_FINTRACK_TOOLS note below). Same path both sides, per the note above.
+      - ${KUMO_LEDGER_DIR:?KUMO_LEDGER_DIR must be set in instance.env — host directory of the ledger pool source}:${KUMO_LEDGER_DIR}:ro
+      # fintrack's ROTATION TOOLING MOUNT IS GONE (2026-08-26). The grading is kumo code now:
+      # `backend/strategies/rotation_grade.py`. It was reached at runtime via a sys.path
+      # insert behind KUMO_FINTRACK_TOOLS, so an env var could switch the market view off and
+      # `/nonexistent` read as deliberate config — which is how staging showed nothing for days.
+    networks: [bus, broker]
+    # DOCKER'S OWN LOGS WERE UNBOUNDED. `docker inspect` reported LogConfig `Config: {}` — no
+    # max-size and no max-file — so the json-file driver grew without limit for the life of the
+    # container. Measured 2026-08-31: 1.8 MB in 13 minutes at boot. This caps stdout; the DURABLE
+    # record is the volume above, which is the one that survives a recreate.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # EXPLICIT RESOLVERS, bypassing Docker's embedded DNS (#354).
+    #
+    # Measured 2026-08-19: 551 `gaierror` failures in 11 hours resolving `paper-api.alpaca.markets` and
+    # `stream.data.alpaca.markets` through `127.0.0.11` — Docker Desktop's internal resolver forwarding to
+    # the VM's host resolver. Intermittent, never total: the same lookup succeeded seconds later.
+    #
+    # This is not a cosmetic connectivity nuisance. A failed venue query makes Nautilus reconciliation
+    # conclude an order is gone and mark it REJECTED (`ORDER_NOT_FOUND_AT_VENUE`), REJECTED is terminal,
+    # and when DNS recovers the venue's own `OrderAccepted` is refused as an invalid transition. The
+    # position keeps a live stop at the broker that the engine cannot see, and every exit on it fails on
+    # `available: 0`. That is how CGAU became un-exitable overnight, and AEM's bracket the day before.
+    #
+    # Removing the trigger is the cheap half of the fix; not rejecting on an unanswered query is the real
+    # one and belongs in the reconciliation path.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      # WAIT FOR THE GATEWAY TO BE HEALTHY, NOT MERELY STARTED. On 2026-08-25 the engine had no
+      # dependency here at all, so on a cold staging deploy it started immediately while the gateway
+      # spent ~5 minutes logging in. The IB client backed off exponentially and reached
+      # `Attempt 8: attempting to reconnect in 300 seconds` — so by the time the gateway went
+      # healthy, a ready gateway sat unused, no lane registered, and verify failed a deploy that was
+      # otherwise fine. Restarting the engine by hand fixed it instantly, which is the tell.
+      #
+      # `service_started` would be worse than nothing: the container starts in about a second and
+      # THEN logs in, so "started" is exactly the lie that made this hard to see.
+      #
+      # `required: false` because ib-gateway is `profiles: ["ibkr"]`. An Alpaca instance never starts
+      # it, and a required dependency on a service in an inactive profile would break the tenant that
+      # currently works — trading one broken stack for the other.
+      ib-gateway:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile.backend
+      additional_contexts:
+        strategies: ../../kumo-strategies
+      args:
+        KUMO_GIT_SHA: ${KUMO_GIT_SHA:-unknown}
+        KUMO_STRATEGIES_SHA: ${KUMO_STRATEGIES_SHA:-unknown}
+    # Apply app-data migrations, then serve. (The api owns the schema; the engine only reads the watchlist.)
+    command: ["sh", "-c", "python -m api.db.migrate && exec python -m api"]
+    environment:
+      KUMO_ENGINE: ${KUMO_ENGINE:-live}   # "live" node = the Redis consumer (reads the engine's ui:stream)
+      KUMO_REDIS_HOST: redis
+      KUMO_REDIS_PORT: ${KUMO_REDIS_PORT:-6379}
+      # THE API READS THIS, AND UNTIL #814 IT NEVER ARRIVED. `_inert_contradictions` runs in THIS
+      # process; an unset value makes `orders_armed` None, and `inert.py` yields nothing for None by
+      # design. So the ORDERS_ARMED half of the inert detector — the half its own docstring credits
+      # with catching the 2026-08-24 "ok while nothing can place an order" incident — had never been
+      # able to fire on any instance. Forwarded here as well as to `engine`, with the same default.
+      KUMO_ORDERS_ARMED: "${KUMO_ORDERS_ARMED:-false}"
+      # The api is the process that SERVES CORS, and it never received this either. It got away with
+      # it because the code's default is "*" and every instance.env asks for "*" — two sources
+      # agreeing is exactly when a severed wire is invisible.
+      KUMO_CORS_ORIGINS: ${KUMO_CORS_ORIGINS:-*}
+      # Symbol search (#25) runs on the api process (it can't reach the engine's Nautilus cache, #20 split),
+      # so it loads its OWN instrument catalog from Alpaca — needs the same keys the engine has.
+      APCA_API_KEY_ID: ${APCA_API_KEY_ID}
+      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY}
+      # App-data store (watchlists etc.). Only the api process talks to Postgres.
+      # The API calls `load_feed_config()` too (consumer.py:52, app.py:201). Without these it
+      # resolves a DIFFERENT provider than the engine whenever the override is set — two
+      # processes disagreeing about what feeds the stack (#581).
+      KUMO_DATA: ${KUMO_DATA:-}
+      KUMO_EXEC: ${KUMO_EXEC:-}
+      KUMO_DATABASE_URL: postgresql+asyncpg://kumo:kumo@postgres:5432/kumo
+      KUMO_SETTINGS_DIR: /data/settings   # settings framework (#49): the api WRITES per-domain values here
+      # Operator alerts (#197). Both processes get the credentials: the api observes health and
+      # reconciliation drift, the engine observes strategy sessions. The account is chosen in
+      # settings; both accounts' pairs are passed so switching needs no redeploy. Absent →
+      # unconfigured, alerts drop quietly, nothing fails.
+      FINTRACK_TELEGRAM_BOT_TOKEN: ${FINTRACK_TELEGRAM_BOT_TOKEN:-}
+      FINTRACK_TELEGRAM_CHAT_ID: ${FINTRACK_TELEGRAM_CHAT_ID:-}
+      KUMO_TELEGRAM_BOT_TOKEN: ${KUMO_TELEGRAM_BOT_TOKEN:-}
+      KUMO_TELEGRAM_CHAT_ID: ${KUMO_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - settingsdata:/data/settings       # read-write: the api is the single writer (PUT /settings)
+    networks: [bus]
     ports:
-      - "${KUMO_API_PORT:?}:8000"
-    depends_on: [redis, postgres]
+      # THE PUBLISH INTERFACE IS A PARAMETER (#824). Bare `8011:8000` binds 0.0.0.0, which INCLUDES
+      # the tailnet address — so `tailscale serve --https=8011` cannot bind the same port and the
+      # container wins. Measured 2026-09-09: two deploys of staging2 failed with
+      #     ports are not available: exposing port TCP 0.0.0.0:8011 -> 127.0.0.1:0:
+      #     listen tcp 0.0.0.0:8011: bind: address already in use
+      # while the only other listener was tailscaled. Binding 127.0.0.1 leaves the tailnet address
+      # free for `tailscale serve`, and the two coexist ON THE SAME PORT NUMBER — which the UI
+      # REQUIRES, because `config.ts` derives the API base from the page's own hostname plus
+      # NEXT_PUBLIC_API_PORT. A different tailnet port leaves the UI asking for an API nothing serves.
+      #
+      # DEFAULTS TO 0.0.0.0, so this is INERT wherever it is not set: same bind, same access.
+      - "${KUMO_PUBLISH_HOST:-0.0.0.0}:${KUMO_API_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   ui:
     build:
       context: ../ui
       dockerfile: ../deploy/Dockerfile.ui
-    environment:
-      NEXT_PUBLIC_API_BASE: http://127.0.0.1:${KUMO_API_PORT:?}
+      args:
+        NEXT_PUBLIC_ENV: "paper"   # API/WS base intentionally unset → UI resolves them from the browser's
+                                   # own host (mobile/LAN works without a rebuild). See ui/src/lib/config.ts
+        # ...but the PORT is this instance's, not the platform's. Left literal, staging-ibkr's UI asked
+        # kumo-paper's API on 8000 for its data instead of its own on 8010.
+        NEXT_PUBLIC_API_PORT: "${KUMO_API_PORT:-8000}"
+        # WHICH TENANT (#610): the name from instance.env, so screenshots identify the stack.
+        NEXT_PUBLIC_INSTANCE: "${INSTANCE:-}"
+        BUILD_ID: ${BUILD_ID:-}    # deterministic buildId (git SHA) for cache-busting — set by `make deploy-ui-paper`
     ports:
-      - "${KUMO_UI_PORT:?}:3000"
-    depends_on: [backend]
-
-volumes:
-  redis-data:
-  pg-data:
+      # Same parameter as the api publish (#824), and it must be the SAME value: the UI and the API
+      # must be reachable at one hostname for `config.ts` to resolve one from the other.
+      - "${KUMO_PUBLISH_HOST:-0.0.0.0}:${KUMO_UI_PORT:-3000}:3000"
+    depends_on:
+      - api
+    restart: unless-stopped

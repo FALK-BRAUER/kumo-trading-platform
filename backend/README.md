@@ -1,6 +1,8 @@
 # backend/
 
-The FastAPI application and the NautilusTrader node host.
+Python backend — FastAPI bridge wrapping a NautilusTrader engine. Hosts the trading lanes, exposes REST +
+WebSocket to the UI, and routes orders to the execution client (Backtest/Sandbox now, IBKR later).
 
-- **Goes in:** `api/` routes and the node lifecycle, `adapters/` out-of-tree venue/data adapters, `actions/` operator actions, `config/` the settings framework and JSON schemas, `scripts/` operator tools incl. `merge_gate.py`; tests next to the code
-- **Stays out:** strategy logic (that is `kumo-trading-strategies`), instance config (that is `instances/`)
+Setup: `uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -e .` (Python 3.12–3.13;
+NOT 3.14 — Nautilus has no wheels yet). Nautilus pinned at 1.229.0. Run the paper spike to verify:
+`./.venv/bin/python ../spikes/nautilus_paper/backtest_spike.py`. Holds: api/, strategies/, adapters/, actions/.

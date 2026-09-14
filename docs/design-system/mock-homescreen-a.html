@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kumo-cockpit · homescreen — Option A</title>
+<style>
+  :root{
+    --bg:#060608; --bg2:#0a0a0d; --surf:#101014; --surf2:#15151b;
+    --line:#1d1d24; --line2:#2a2a33;
+    --t1:#e6e6ea; --t2:#9a9aa4; --t3:#63636d;
+    --bull:#4ade80; --bull-d:#0f2c1d; --bear:#f47171; --bear-d:#2c1417;
+    --watch:#f0b640; --info:#5aa9f0; --ai:#a78bfa;
+    --on-bull:#04140b; --on-bear:#2c0b0b; --on-info:#04121f;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  body.day{
+    --bg:#f6f6f8; --bg2:#eeeef1; --surf:#ffffff; --surf2:#f3f3f5;
+    --line:#e4e4e8; --line2:#d3d3d9;
+    --t1:#18181b; --t2:#52525b; --t3:#9a9aa4;
+    --bull:#159a46; --bull-d:#dcf5e5; --bear:#d63030; --bear-d:#fbe1e1;
+    --watch:#c07d12; --info:#2563eb; --ai:#7c3aed;
+    --on-bull:#fff; --on-bear:#fff; --on-info:#fff;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--mono);
+    font-size:12px;line-height:1.35;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 12px 70px}
+  .r{text-align:right} .pos{color:var(--bull)} .neg{color:var(--bear)} .mut{color:var(--t3)}
+  h1{font-size:16px;font-weight:700;margin:0;letter-spacing:-.01em}
+  .top{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:8px;
+    display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .top .tag{color:var(--watch);border:1px solid color-mix(in srgb,var(--watch) 40%,transparent);
+    border-radius:4px;padding:1px 6px;font-size:9px;letter-spacing:.06em}
+  .lead{color:var(--t2);font-size:11px;margin:0 0 18px;line-height:1.55;max-width:76ch}
+  .lead b{color:var(--t1);font-weight:600}
+  .eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:9px;color:var(--t3);margin:28px 0 7px}
+  .note{color:var(--t2);font-size:10.5px;margin:7px 0 0;line-height:1.55}
+  .note b{color:var(--t1);font-weight:600}
+  .tile{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden;margin-bottom:8px}
+  .th{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    padding:9px 13px;border-bottom:1px solid var(--line)}
+  .th .ti{font-size:11px;letter-spacing:.04em}
+  .th .sm{font-size:9.5px;color:var(--t3);letter-spacing:.06em}
+  .bd{padding:11px 13px}
+
+  /* provenance chips — the whole point of this mock */
+  .chip{font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;border-radius:3px;
+    padding:1.5px 5px;border:1px solid;white-space:nowrap;font-weight:600}
+  .c-live{color:var(--bull);border-color:color-mix(in srgb,var(--bull) 40%,transparent);
+    background:color-mix(in srgb,var(--bull) 9%,transparent)}
+  .c-ai{color:var(--ai);border-color:color-mix(in srgb,var(--ai) 45%,transparent);
+    background:color-mix(in srgb,var(--ai) 10%,transparent)}
+  .c-open{color:var(--watch);border-color:color-mix(in srgb,var(--watch) 45%,transparent);
+    background:color-mix(in srgb,var(--watch) 9%,transparent)}
+  .c-none{color:var(--t3);border-color:var(--line2);background:transparent}
+
+  /* stale strip */
+  .stale{display:flex;gap:9px;align-items:center;padding:9px 13px;border-radius:8px;
+    border:1px solid color-mix(in srgb,var(--watch) 40%,transparent);
+    background:color-mix(in srgb,var(--watch) 8%,transparent);margin-bottom:8px}
+  .stale .dot{width:8px;height:8px;border-radius:50%;background:var(--watch);flex:none}
+  .stale .m{font-size:11px;color:var(--t1)}
+  .stale .m span{color:var(--t3);font-size:10px;display:block;margin-top:2px}
+
+  /* P&L hero */
+  .hero{padding:13px 15px 11px}
+  .nl-lbl{font-size:9px;letter-spacing:.12em;color:var(--t3);text-transform:uppercase}
+  .nl{font-size:25px;font-weight:700;letter-spacing:-.02em;margin-top:1px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .grid4 .m{background:var(--surf);padding:9px 15px}
+  .grid4 .k{font-size:9px;letter-spacing:.08em;color:var(--t3);text-transform:uppercase;
+    display:flex;align-items:center;gap:5px}
+  .grid4 .val{font-size:17px;margin-top:2px;font-weight:600}
+  .grid4 .val.empty{color:var(--t3);font-weight:400;font-size:13px}
+
+  /* split */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+  .split .s{background:var(--surf);padding:10px 13px}
+  .split .who{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
+  .split .amt{font-size:16px;font-weight:600;margin-top:2px}
+  .split .det{font-size:10px;color:var(--t3);margin-top:3px}
+
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  @media(max-width:760px){.cols2,.cols3,.grid4,.split{grid-template-columns:1fr}}
+
+  /* AI brief blocks */
+  .ai ul{list-style:none;margin:0;padding:0}
+  .ai li{padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;line-height:1.5}
+  .ai li:last-child{border-bottom:0}
+  .cite{display:inline-block;font-size:8.5px;color:var(--info);border:1px solid color-mix(in srgb,var(--info) 30%,transparent);
+    border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:1px;white-space:nowrap}
+  .checked{display:flex;gap:6px;align-items:center;padding:7px 13px;border-top:1px solid var(--line);
+    font-size:9.5px;color:var(--t3);background:var(--surf2)}
+  .checked b{color:var(--bull);font-weight:600}
+
+  /* empty / undecided states */
+  .empty-bd{padding:22px 13px;text-align:center}
+  .empty-bd .big{font-size:11px;color:var(--t2)}
+  .empty-bd .why{font-size:10px;color:var(--t3);margin-top:6px;line-height:1.55;max-width:44ch;
+    margin-left:auto;margin-right:auto}
+  .hatch{background-image:repeating-linear-gradient(45deg,transparent,transparent 6px,
+    color-mix(in srgb,var(--t3) 7%,transparent) 6px,color-mix(in srgb,var(--t3) 7%,transparent) 12px)}
+
+  /* actions */
+  .att{list-style:none;margin:0;padding:0}
+  .att li{display:flex;gap:9px;align-items:flex-start;padding:8px 13px;border-bottom:1px solid var(--line)}
+  .att li:last-child{border-bottom:0}
+  .att .rail{width:2px;align-self:stretch;border-radius:2px;flex:none}
+  .att .w .rail{background:var(--watch)} .att .e .rail{background:var(--bear)}
+  .att .lbl{font-size:9px;letter-spacing:.08em;text-transform:uppercase;flex:none;padding-top:1px}
+  .att .w .lbl{color:var(--watch)} .att .e .lbl{color:var(--bear)}
+  .att .msg{font-size:11px;color:var(--t1)}
+  .att .msg .why{display:block;color:var(--t3);font-size:10px;margin-top:2px}
+
+  table.lt{width:100%;border-collapse:collapse}
+  table.lt th{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);
+    font-weight:400;text-align:left;padding:7px 13px 5px;border-bottom:1px solid var(--line)}
+  table.lt th.r{text-align:right}
+  table.lt td{padding:6px 13px;border-bottom:1px solid var(--line);font-size:11px}
+  table.lt tr:last-child td{border-bottom:0}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 13px;border:1px solid var(--line);
+    border-radius:8px;background:var(--bg2);margin-bottom:18px}
+  .legend div{display:flex;gap:6px;align-items:center;font-size:10px;color:var(--t2)}
+
+  .toggle{position:fixed;right:14px;bottom:14px;background:var(--surf2);color:var(--t2);
+    border:1px solid var(--line2);border-radius:20px;padding:6px 13px;font-family:var(--mono);
+    font-size:10px;cursor:pointer}
+</style>
+
+<div class="wrap">
+
+  <div class="top">
+    <h1>homescreen · Option A — status board</h1>
+    <span class="tag">MOCK · NOTHING BUILT</span>
+  </div>
+
+  <p class="lead">
+    Option A on the <b>kumo-trader <code>HomeDashboard</code></b> composition — P&amp;L hero, then the block
+    grid. Drawn against <b>real cockpit state read 2026-08-11 ~19:05 SGT</b>. Standalone: nothing in
+    <code>ui/</code> was touched and this is <b>not</b> merged into <code>mock-v2.html</code>.
+    Every block is tagged with where its data would actually come from, because that is the decision
+    this mock exists to support — Option A has more blocks than we have data paths.
+  </p>
+
+  <div class="legend">
+    <div><span class="chip c-live">live</span> data path exists today</div>
+    <div><span class="chip c-ai">ai · checked</span> model output, gated by <code>narrative/check.py</code></div>
+    <div><span class="chip c-open">undecided</span> the operator has not ruled</div>
+    <div><span class="chip c-none">not wired</span> no data path — would have to be built</div>
+  </div>
+
+  <!-- ── staleness ───────────────────────────────────────────────── -->
+  <div class="stale">
+    <span class="dot"></span>
+    <div class="m">Last decision is from <b>2026-08-10</b>, not today.
+      <span>Engine TRADING since 2026-08-04 · <code>decision_is_today: false</code> · next session has not run.</span>
+    </div>
+  </div>
+
+  <!-- ── P&L hero ────────────────────────────────────────────────── -->
+  <div class="tile">
+    <div class="th"><span class="ti">P&amp;L</span><span class="sm">ACCOUNT · EQUITY 97,384.86</span></div>
+    <div class="hero">
+      <div class="nl-lbl">Net</div>
+      <div class="nl neg">−1,737.03</div>
+    </div>
+    <div class="grid4">
+      <div class="m"><div class="k">Realized <span class="chip c-live">live</span></div>
+        <div class="val neg">−1,737.03</div></div>
+      <div class="m"><div class="k">Secured <span class="chip c-none">not wired</span></div>
+        <div class="val empty">no stop concept</div></div>
+      <div class="m"><div class="k">Unrealized <span class="chip c-live">live</span></div>
+        <div class="val mut">— <span style="font-size:10px">market closed</span></div></div>
+      <div class="m"><div class="k">Cash <span class="chip c-live">live</span></div>
+        <div class="val">33,265.46</div></div>
+    </div>
+    <div class="split">
+      <div class="s"><div class="who">MOMENTUM-002 · automated</div>
+        <div class="amt neg">−1,289.79</div>
+        <div class="det">6 open — AEM CGAU LNC VCTR VFLO WPM</div></div>
+      <div class="s"><div class="who">MANUAL-001 + external</div>
+        <div class="amt neg">−447.24</div>
+        <div class="det">1 open — FIG</div></div>
+    </div>
+  </div>
+  <p class="note"><b>The split is the highest-value number missing today.</b> The current header conflates
+    the two books. <code>positions[].strategy_id</code> already carries it; nothing surfaces it.
+    <b>Secured</b> stays empty on purpose — it needs a resting stop above entry, and MOMENTUM exits are
+    rule-based per session, so the concept may simply not translate.</p>
+
+  <!-- ── AI briefs ───────────────────────────────────────────────── -->
+  <p class="eyebrow">AI briefs — journal-grounded</p>
+
+  <div class="cols3">
+
+    <div class="tile">
+      <div class="th"><span class="ti">Portfolio</span><span class="chip c-ai">ai · checked</span></div>
+      <div class="bd ai">
+        <ul>
+          <li>Held 6 of 8 intended names; <b>CHEF</b> and <b>BRK.B</b> never opened.
+            <span class="cite">journal.risk</span></li>
+          <li>Both were blocked by the position cap, not by a failed order.
+            <span class="cite">journal.risk</span></li>
+          <li><b>MET</b> exited after leaving the ranking, having peaked at 99.95 against a 94.85 entry.
+            <span class="cite">trail · decision.reasons</span></li>
+          <li><b>PRU</b> exited on give-back: all of a 0.7% peak, then 1.5% below entry.
+            <span class="cite">decision.reasons</span></li>
+        </ul>
+      </div>
+      <div class="checked">✓ <b>4/4 claims</b> traced to a bundle field · 0 violations</div>
+    </div>
+
+    <div class="tile">
+      <div class="th"><span class="ti">Market</span><span class="chip c-open">undecided</span></div>
+      <div class="bd empty-bd hatch">
+        <div class="big">Not drawn — awaiting your call</div>
+        <div class="why">kumo-trader ran this on Gemini with Google Search grounding. Nothing in this
+          system can verify a market claim, so it would be the one block on the page that
+          <b>cannot be checked</b>.</div>
+      </div>
+    </div>
+
+    <div class="tile">
+      <div class="th"><span class="ti">Radar</span><span class="chip c-open">undecided</span></div>
+      <div class="bd empty-bd hatch">
+        <div class="why" style="margin-top:0">Argued against in <code>proposal-homescreen.md</code> §2:
+          MOMENTUM has already ranked and decided. A second, incompatible ranking here
+          <b>“is an invitation to override the system you built to stop yourself overriding.”</b></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tile">
+    <div class="th"><span class="ti">P&amp;L analysis</span><span class="chip c-ai">ai · checked</span></div>
+    <div class="bd ai">
+      <ul>
+        <li>The session planned <b>10 actions</b> — hold 8 · enter 8 · exit 2 — and submitted <b>8</b>.
+          The gap is the position cap, not a failure. <span class="cite">decision.summary · submitted_count</span></li>
+        <li>Losses are concentrated in the automated book: <b>−1,289.79</b> against <b>−447.24</b> manual
+          and external combined. <span class="cite">positions[].strategy_id</span></li>
+        <li>Three closed names account for most of it — <b>DINO −523.26</b>, <b>HSBC −444.54</b>,
+          <b>CVS −278.88</b> — partly offset by <b>MET +294.71</b> and <b>AFL +114.11</b>.
+          <span class="cite">positions[].realized_pnl</span></li>
+      </ul>
+    </div>
+    <div class="checked">✓ <b>3/3 claims</b> traced · no forward-looking language · 0 violations</div>
+  </div>
+
+  <p class="note"><b>Why these two and not four.</b> <code>research/ai-analysis.md</code> §0: the model
+    <b>explains, summarises, questions and audits</b> facts that deterministic code already computed — it
+    does not predict, and it says nothing it cannot cite. Portfolio and P&amp;L Analysis summarise our own
+    journal, so every claim is checkable against the bundle and the existing
+    <code>backend/api/narrative/check.py</code> can gate them. Market and Radar point outward, where no such
+    check exists. That is the line, and it is the reason the two blocks above carry citations and a pass
+    count rather than prose.</p>
+
+  <!-- ── Calendar + Risk ─────────────────────────────────────────── -->
+  <p class="eyebrow">Calendar · Risk</p>
+  <div class="cols2">
+
+    <div class="tile">
+      <div class="th"><span class="ti">Earnings calendar</span><span class="chip c-none">not wired</span></div>
+      <div class="bd empty-bd hatch">
+        <div class="big">No earnings feed in the cockpit</div>
+        <div class="why">kumo-trader had ticker · date · <code>daysUntil</code> · <code>held</code>.
+          Building it is its own ticket — an earnings source plus a held-name join.</div>
+      </div>
+    </div>
+
+    <div class="tile">
+      <div class="th"><span class="ti">Risk</span><span class="sm">PORTFOLIO-WIDE</span></div>
+      <table class="lt">
+        <tr><th>Measure</th><th class="r">Value</th><th class="r">Source</th></tr>
+        <tr><td>Deployed</td><td class="r">64,119.40</td><td class="r"><span class="chip c-live">live</span></td></tr>
+        <tr><td>Cash</td><td class="r">33,265.46</td><td class="r"><span class="chip c-live">live</span></td></tr>
+        <tr><td>Buying power</td><td class="r">312,596.16</td><td class="r"><span class="chip c-live">live</span></td></tr>
+        <tr><td class="mut">Sector concentration</td><td class="r mut">—</td><td class="r"><span class="chip c-none">#12 · #80</span></td></tr>
+        <tr><td class="mut">Win rate · expectancy</td><td class="r mut">—</td><td class="r"><span class="chip c-none">deferred</span></td></tr>
+      </table>
+      <div class="checked">Edge stats withheld: ~130 in-sample sessions, <b>no holdout</b> — a win rate here
+        would manufacture confidence the data cannot support.</div>
+    </div>
+
+  </div>
+
+  <!-- ── Sectors + Actions ───────────────────────────────────────── -->
+  <p class="eyebrow">Sectors · Actions</p>
+  <div class="cols2">
+
+    <div class="tile">
+      <div class="th"><span class="ti">Sectors</span><span class="chip c-none">not wired</span></div>
+      <div class="bd empty-bd hatch">
+        <div class="big">No equivalent exists here</div>
+        <div class="why">kumo-trader's rollup ran on its own scoring system — <code>avgScore</code>,
+          <code>topRating</code>, <code>+++</code> counts. The cockpit has no scores. Portfolio-wide sector
+          exposure is a different thing and lives in <b>#12 / #80</b>, including ETF decomposition.</div>
+      </div>
+    </div>
+
+    <div class="tile">
+      <div class="th"><span class="ti">Actions</span><span class="chip c-live">live</span></div>
+      <ul class="att">
+        <li class="w"><span class="rail"></span><span class="lbl">stale</span>
+          <span class="msg">Last decision is 2026-08-10, not today
+            <span class="why">decision_is_today: false</span></span></li>
+        <li class="w"><span class="rail"></span><span class="lbl">short</span>
+          <span class="msg">2 intended entries never opened
+            <span class="why">CHEF, BRK.B — position cap</span></span></li>
+      </ul>
+      <div class="checked">Empty on a clean day — and when it is empty the tile says so and stops.</div>
+    </div>
+
+  </div>
+
+  <p class="note" style="margin-top:26px"><b>What Option A costs, stated plainly.</b> Eight blocks; three
+    have a full data path today (P&amp;L, Risk-minus-edge, Actions), two are AI blocks that need a model
+    wired behind the existing checker, two have <b>no</b> data path at all (Calendar, Sectors), and one
+    (<code>secured</code>) may not translate to a rule-based exit system. Also: kumo-trader's version
+    polled five REST endpoints on a five-minute <code>setInterval</code>. The cockpit's rule is
+    WebSocket, no polling — so each of these blocks becomes a bus-driven plane, which is a data-layer
+    build, not a component port.</p>
+
+</div>
+
+<button class="toggle" onclick="document.body.classList.toggle('day')">day / night</button>
