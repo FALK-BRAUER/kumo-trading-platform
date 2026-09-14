@@ -11,7 +11,9 @@ stayed; the platform is now five layers: runtime, execution, operations, strateg
 ## What it is
 
 - One backend process per broker session (Interactive Brokers paper, Alpaca paper) running a
-  NautilusTrader node with the strategies installed from `kumo-trading-strategies`.
+  NautilusTrader node. Strategies from `kumo-trading-strategies`, the Alpaca adapter from
+  `kumo-nautilus-alpaca-adapter`, IBKR via Nautilus's own adapter — all three pinned in
+  `backend/pyproject.toml`.
 - Execution, protective orders, venue reconciliation and a per-strategy operator view.
 - An instance model: everything an instance needs — feed, settings, secrets *names*, pinned versions —
   lives in `instances/<name>/`; see `instances/example/`.
@@ -23,8 +25,9 @@ stayed; the platform is now five layers: runtime, execution, operations, strateg
   CORS. Run it on a private network or behind your own auth. Do not expose it to the internet.
 - **Not a live-trading system.** It is used with paper accounts. Nothing here is investment advice
   and nothing here has been validated for real capital.
-- **Not a strategy library.** Strategies live in `kumo-trading-strategies` (public, the whole
-  library: runtime contract, every strategy, backtesting harness). This repo installs it.
+- **Not a strategy library, not a venue adapter.** Strategies live in `kumo-trading-strategies`
+  (public, the whole library); the Alpaca adapter lives in `kumo-nautilus-alpaca-adapter`. This
+  repo pins and installs both.
 - **Not multi-tenant.** One instance, one broker session, one operator.
 
 ## Quick start

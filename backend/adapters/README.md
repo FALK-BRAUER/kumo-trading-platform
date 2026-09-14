@@ -1,6 +1,6 @@
 # adapters/
 
-Out-of-tree NautilusTrader adapters, written only where Nautilus has no mechanism.
+Glue between the platform and the venue adapters it pins (Nautilus IB, kumo-nautilus-alpaca-adapter).
 
-- **Goes in:** one package per venue/data provider, each with the Nautilus mechanism it replaces named at the top
-- **Stays out:** anything Nautilus already provides
+- **Goes in:** provider registry entries and thin wiring, each naming the package it wires
+- **Stays out:** adapter implementations — a full adapter is its own package

@@ -1,6 +1,6 @@
 # CLAUDE.md — kumo-trading-platform
 
-The kumo trading platform (kumo = 雲, cloud): a FastAPI backend that hosts a NautilusTrader node and a Next.js UI that renders its state. Five layers — runtime, execution, operations, strategies, UI. Strategies are installed from `kumo-trading-strategies`; this repo owns execution, protection, reconciliation and the operator view. One instance per broker session, configured from `instances/<name>/`, no auth — built for a private network. Research, backtests and market data live in the private `kumo-research` repo.
+The kumo trading platform (kumo = 雲, cloud): a FastAPI backend that hosts a NautilusTrader node and a Next.js UI that renders its state. Five layers — runtime, execution, operations, strategies, UI. Strategies come from `kumo-trading-strategies`, the Alpaca adapter from `kumo-nautilus-alpaca-adapter`, IBKR from Nautilus itself; this repo owns execution, protection, reconciliation and the operator view. One instance per broker session, configured from `instances/<name>/`, no auth — built for a private network. Research, backtests and market data live in the private `kumo-research` repo.
 
 ## Rules
 
