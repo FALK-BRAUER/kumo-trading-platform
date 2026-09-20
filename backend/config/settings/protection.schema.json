@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Protective stops",
+  "description": "An emergency stop resting at the broker for every held position, so the book stays protected when the engine is not running. Width comes from each symbol's own volatility.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Rest protective stops at the broker automatically",
+      "description": "Rest protective stops automatically. ON by default: protection constrains rather than acts, so the opt-in rule for new automation does not apply to it. Checks the broker rather than the local cache, and only runs during regular hours."
+    },
+    "atrMultiple": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 6,
+      "default": 1.5,
+      "title": "Stop width (× ATR)",
+      "description": "Stop width in ATRs below the high-water mark. Lower is tighter and risks selling on noise; higher protects less."
+    },
+    "atrLookback": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 60,
+      "default": 14,
+      "title": "ATR lookback (days)",
+      "description": "Sessions of true range averaged to measure the symbol's normal daily movement. 14 is the conventional window and matches the order ticket's own ATR stop."
+    },
+    "minTrailPct": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 50,
+      "default": 1.0,
+      "title": "Floor (%)",
+      "description": "Never tighter than this, however quiet the symbol. A stop that fires on noise turns a paper wobble into a realised loss."
+    },
+    "maxTrailPct": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 15.0,
+      "title": "Ceiling (%)",
+      "description": "Never wider than this. Past this width a stop is decoration — hitting the ceiling means the position is too volatile for its size."
+    },
+    "reprotectOnFill": {
+      "type": "boolean",
+      "default": false,
+      "title": "Re-protect automatically after a partial exit",
+      "description": "Resize the resting stop after a partial exit. Off by default: resizing a resting stop is what stripped protection from five positions on 2026-08-12."
+    },
+    "QC345-003_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "trail"
+      },
+      "title": "QC345 — monthly top-down rotation — protection",
+      "description": "TRAIL is the account-wide peak-relative stop and the default. ENTRY FLOOR rests a fixed stop at this lane's own entry minus the multiple, set once and never raised. NONE rests nothing and reports the lane as OPTED-OUT — neither covered nor naked."
+    },
+    "MOMENTUM-002_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "trail"
+      },
+      "title": "MOMENTUM — daily systematic rotation — protection",
+      "description": "TRAIL is the account-wide peak-relative stop and the default. ENTRY FLOOR rests a fixed stop at this lane's own entry minus the multiple, set once and never raised. NONE rests nothing and reports the lane as OPTED-OUT — neither covered nor naked."
+    },
+    "BCTROT-004_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "trail"
+      },
+      "title": "BCTROT — BCT rotation, midday and close — protection",
+      "description": "TRAIL is the account-wide peak-relative stop and the default. ENTRY FLOOR rests a fixed stop at this lane's own entry minus the multiple, set once and never raised. NONE rests nothing and reports the lane as OPTED-OUT — neither covered nor naked."
+    },
+    "TECHIVOL-005_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "trail"
+      },
+      "title": "TECHIVOL — inverse-volatility tech sleeve — protection",
+      "description": "TRAIL is the account-wide peak-relative stop and the default. ENTRY FLOOR rests a fixed stop at this lane's own entry minus the multiple, set once and never raised. NONE rests nothing and reports the lane as OPTED-OUT — neither covered nor naked."
+    },
+    "MANUAL-001_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "trail"
+      },
+      "title": "MANUAL — discretionary clicks — protection",
+      "description": "TRAIL is the account-wide peak-relative stop and the default. ENTRY FLOOR rests a fixed stop at this lane's own entry minus the multiple, set once and never raised. NONE rests nothing and reports the lane as OPTED-OUT — neither covered nor naked."
+    },
+    "CRSISHORT-006_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "none"
+      },
+      "title": "CRSI short — protection",
+      "description": "NONE by declaration (#1029): the adapter carries its own per-short trail and cover, and the plane is long-only, so no stop is rested on a short row regardless. Default = the registry stance; a written key is an override (source=settings)."
+    },
+    "SMHGLD-007_protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "trail",
+            "entry_floor",
+            "none"
+          ],
+          "title": "Mode",
+          "description": "trail = the account-wide peak-relative trailing stop. entry_floor = a fixed stop at this lane's avg_px_open minus the multiple, set once at placement. none = no broker stop for this lane."
+        },
+        "atrMultiple": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 6,
+          "title": "Width (× ATR) for this lane",
+          "description": "Overrides the stop width above, for this lane only. Omitted means INHERIT, never zero."
+        }
+      },
+      "default": {
+        "mode": "none"
+      },
+      "title": "SMHGLD — fixed-weight SMH/GLD sleeve — protection",
+      "description": "NONE by declaration (#953, #1029): a fixed-weight sleeve rebalancing ~93 times a year; a stop sized to the holding is tripped by its own trims. Reported as OPTED-OUT. Default = the registry stance; a written key is an override (source=settings)."
+    }
+  }
+}

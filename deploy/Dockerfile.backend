@@ -1,0 +1,81 @@
+# Backend image (#21) — one image for both roles; compose picks the command:
+#   engine → python -m api.engine_node   (standalone Nautilus node)
+#   api    → python -m api               (FastAPI UI backend / Redis consumer)
+#
+# Run from source with PYTHONPATH=/app (NOT pip-installed) so api/feed_config.py resolves
+# /app/config/feed.toml — the config path is relative to the source tree.
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential curl git \
+ && rm -rf /var/lib/apt/lists/*
+
+# Dependency layer — explicit list, independent of source, so rebuilds on code change stay fast.
+# Mirrors backend/pyproject.toml [api] + [data] + [ibkr] + [momentum] (minus the docker lib — the
+# gateway is a separate compose service here, not Nautilus-managed).
+#
+# This list is NOT derived from pyproject.toml. Adding a backend dependency there and not here has
+# crash-looped the container before; if you touch one, touch both.
+#
+# kumo-trading-strategies is installed from a local build context below, NOT from pypi or a git URL.
+RUN pip install --no-cache-dir \
+      "nautilus_trader[ib]==1.229.0" \
+      databento \
+      fastapi \
+      "uvicorn[standard]" \
+      websockets \
+      redis \
+      "sqlalchemy[asyncio]>=2.0" \
+      asyncpg \
+      alembic \
+      "jsonschema>=4" \
+      tzdata
+
+# kumo-trading-strategies from the LOCAL checkout, passed in as a named build context. A git+https install
+# cannot work here: the repo is private and the build has no credentials. Installed as its own layer
+# so a strategy change does not invalidate the pip layer above.
+COPY --from=strategies . /tmp/kumo-trading-strategies
+RUN pip install --no-cache-dir /tmp/kumo-trading-strategies && rm -rf /tmp/kumo-trading-strategies
+
+COPY api ./api
+COPY strategies ./strategies
+COPY adapters ./adapters
+COPY actions ./actions
+COPY config ./config
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+
+# WHICH COMMIT IS THIS IMAGE (#329). Placed AFTER the COPY layers on purpose: these ARGs change on every
+# commit, so putting them earlier would invalidate the pip and kumo-trading-strategies layers on each build.
+#
+# Why this exists: on 2026-08-18 an outage was misdiagnosed twice because nobody could answer "what code is
+# actually running". Establishing it required copying `engine_node.py` out of the container and diffing it
+# against three candidate commits — the running engine turned out to be 59 lines behind main, so a fix that
+# had been merged, tested and believed live had in fact never executed. An image that cannot name its own
+# commit turns every incident into an archaeology exercise, and image CREATION TIME does not answer it: a
+# rebuild of an OLD commit carries a NEW timestamp.
+#
+# Two SHAs because two source trees go into this image and they move independently — the cockpit tree
+# (COPY api/strategies/... above) and the kumo-trading-strategies checkout installed from the `strategies` build
+# context. A cockpit SHA alone would still leave "which strategies code?" unanswerable.
+#
+# Default `unknown` rather than failing the build: an ad-hoc `docker build` for debugging must still work.
+# `unknown` is honest and greppable; a WRONG sha would be worse than none, which is why nothing here
+# guesses or falls back to a branch name.
+ARG KUMO_GIT_SHA=unknown
+ARG KUMO_STRATEGIES_SHA=unknown
+
+ENV PYTHONPATH=/app \
+    KUMO_ENGINE=live \
+    KUMO_GIT_SHA=${KUMO_GIT_SHA} \
+    KUMO_STRATEGIES_SHA=${KUMO_STRATEGIES_SHA}
+
+# Also as OCI labels so `docker image inspect` answers it WITHOUT starting a container — the container may
+# be crash-looping, which is exactly when the question is most urgent.
+LABEL org.opencontainers.image.revision="${KUMO_GIT_SHA}" \
+      com.kumo.strategies.revision="${KUMO_STRATEGIES_SHA}"
+
+# Default role = the API. The engine service overrides: command: ["python", "-m", "api.engine_node"]
+CMD ["python", "-m", "api"]

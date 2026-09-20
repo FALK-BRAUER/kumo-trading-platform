@@ -1,0 +1,25 @@
+name: merge-gate
+
+# THE REQUIRED CHECK. Branch protection on `main` requires this job. It runs the same gate a
+# maintainer runs locally (`backend/scripts/merge_gate.py`): head equals upstream, suite green, head
+# unmoved since the suite ran. A PR that this job does not pass cannot be merged by anyone.
+
+on:
+  pull_request:
+
+jobs:
+  merge-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync
+        run: uv sync --all-extras
+        working-directory: backend
+      - name: Gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python scripts/merge_gate.py ${{ github.event.pull_request.number }} --no-comment
+        working-directory: backend

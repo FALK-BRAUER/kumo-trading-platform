@@ -1,0 +1,4 @@
+# PLANNED refs. The deploy builds from THESE, not from whatever is in a working tree, and writes
+# `versions.deployed` by reading the running containers back. The two disagreeing is the signal.
+COCKPIT_REF=main
+STRATEGIES_REF=main

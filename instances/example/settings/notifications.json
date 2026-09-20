@@ -1,0 +1,4 @@
+{
+  "$schema": "../../../backend/config/schema/notifications.json",
+  "channels": []
+}

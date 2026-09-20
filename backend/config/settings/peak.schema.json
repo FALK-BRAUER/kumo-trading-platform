@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PEAK \u2014 adaptive trailing stop",
+  "description": "A trailing stop that follows the high-water mark and tightens when a move looks exhausted. Arming replaces any existing protective stop on the position.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "trailWidePct": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 25,
+      "default": 2.5,
+      "title": "Wide trail (%)",
+      "description": "The leash while simply riding. The stop sits this far below the highest price seen since the order was placed, and follows it up. Alpaca refuses anything under 0.1% (measured, 2026-08-12)."
+    },
+    "trailTightPct": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 25,
+      "default": 1.0,
+      "title": "Tight trail (%)",
+      "description": "Trail width after a blow-off is detected. Tighter than the wide trail, on the view that an exhausted move gives back fast."
+    },
+    "extPctThreshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 500,
+      "default": 40,
+      "title": "Blow-off: extension above the 20-day average (%)",
+      "description": "How far above the moving average counts as extended. One of two conditions that must both hold before the trail tightens."
+    },
+    "slopePctThreshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 3,
+      "title": "Blow-off: vertical move (%)",
+      "description": "A move of this size over the last few 1-minute bars also counts as a blow-off, so a fast spike is caught even before it is stretched far from the base. Either condition is enough."
+    },
+    "offHodPctThreshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 50,
+      "default": 2,
+      "title": "Fade: distance off the high (%)",
+      "description": "How far off the session high counts as fading. Pairs with the extension threshold; both must hold."
+    },
+    "lowerHighBars": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 20,
+      "default": 3,
+      "title": "Fade: consecutive lower highs",
+      "description": "Consecutive lower highs required to confirm a fade. Fewer fires on noise; more can miss the turn."
+    },
+    "trimMax": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "default": 2,
+      "title": "Maximum trims",
+      "description": "Maximum trims per trade cycle. Bounds transaction cost \u2014 a re-arm inherits what the cycle already spent."
+    },
+    "trimFraction": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "default": 0.45,
+      "title": "Trim size (fraction of the position)",
+      "description": "How much of what is currently held gets sold on each trim. 0.45 = 45%. Deliberately chunky rather than repeated small nibbles, which would pay the spread over and over."
+    },
+    "trailWideAtrMultiple": {
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 6,
+      "default": 1.5,
+      "title": "Wide trail (x ATR)",
+      "description": "Normal trail width, in ATRs. Scaled per symbol rather than a flat percentage, because one percentage cannot fit a book whose ATR ranges from 1.6% to 11.2%."
+    },
+    "trailTightAtrMultiple": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 6,
+      "default": 0.75,
+      "title": "Tight trail (x ATR)",
+      "description": "The tightened trail after a blowoff, also in ATRs. Must stay below the wide multiple or the blowoff branch would WIDEN the stop instead of tightening it \u2014 the one thing it exists to do."
+    },
+    "atrLookback": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 60,
+      "default": 14,
+      "title": "ATR lookback (days)",
+      "description": "Sessions of true range averaged to measure the symbol's normal daily movement. Matches the protection domain's own lookback so both stops on one instrument are sized off the same number."
+    }
+  }
+}

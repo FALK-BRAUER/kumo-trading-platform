@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../backend/config/schema/protection.json",
+  "stop_pct": 0.05,
+  "require_protection_before_entry": true
+}

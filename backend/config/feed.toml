@@ -1,0 +1,108 @@
+# Market-data feed config — edit here, no code change (read by api/feed_config.py).
+#
+# Provider-agnostic: `[data].provider` names which Nautilus DataClient gets registered; the
+# api/providers registry maps the name to a factory. Swap providers = change one line (and write an
+# out-of-tree adapter only if Nautilus has none). Downstream sees only Nautilus Bars — provider-blind.
+#
+# Secrets never live here: the provider table holds the *env-var name* (api_key_env), and
+# scripts/run-api.sh injects the value from the macOS keychain at launch.
+
+[data]
+provider = "alpaca"   # IBKR-independent stream (#23). Rollback: set "databento" (historical) or "ibkr".
+backfill_days = 200   # history pulled per symbol on start (≥200 → MA200/Ichimoku Span B can form)
+
+# IBKR real-time market data (IBKR Pro entitlement). Streams live bars/quotes over the SAME gateway the
+# exec client uses, on a DISTINCT api client id (data=2, exec=1). Data+exec on one venue → no cross-vendor
+# instrument-id collision (#17). Env KUMO_IBG_HOST/PORT override for the container (→ ib-gateway:4004).
+[data.ibkr]
+ibg_host = "127.0.0.1"
+ibg_port = 4002
+ibg_client_id = 2
+
+[data.databento]
+api_key_env = "DATABENTO_API_KEY"
+
+# Alpaca market data (issue #23). IBKR-independent stream — Alpaca holds no contention with the live
+# IBKR account. Secrets from env (run-api.sh injects from keychain: alpaca-paper-key/alpaca-secret-paper).
+# feed: "iex" (free/thin) or "sip" (paid/full consolidated tape). To activate: set [data].provider = "alpaca".
+# SIP since 2026-08-01 (Algo Trader Plus): consolidated NBBO + real volume, UNLIMITED WS symbol
+# subscriptions (the engine's realtime budget lifts itself off this value — `realtime_symbol_budget`),
+# no 15-minute historical restriction, 10k REST req/min. Reverting this to "iex" silently re-caps live
+# symbols at 7 and makes relative-volume readings single-venue — do not flip it casually.
+[data.alpaca]
+key_env = "APCA_API_KEY_ID"
+secret_env = "APCA_API_SECRET_KEY"
+feed = "sip"
+
+# Execution / account. Provider reconciles account positions/orders into the cache → portfolio tile.
+#   "alpaca" — Alpaca paper account over REST (gateway-free; keys via env, #23). ACTIVE.
+#   "ibkr"   — IB Gateway (docker, paper) reconciliation — needs the gateway up (read_only_api=False).
+#   "none"   — data-only (charts only). Override: env KUMO_EXEC=none|ibkr|alpaca.
+[execution]
+provider = "alpaca"
+[execution.alpaca]
+# Secrets from env (run-api.sh injects from keychain: alpaca-paper-key/alpaca-secret-paper).
+key_env = "APCA_API_KEY_ID"
+secret_env = "APCA_API_SECRET_KEY"
+[execution.ibkr]
+# Account id is not committed — run-api.sh injects it from the keychain (service: ibkr-account-paper).
+account_id_env = "IBKR_ACCOUNT_ID"
+ibg_host = "127.0.0.1"
+ibg_port = 4002
+ibg_client_id = 1
+
+# UI bridge (issue #20). The engine process publishes bars + periodic position snapshots to a Redis
+# Stream; the separate UI/FastAPI process reads it (redis-py). Transient live bus — ephemeral Redis is
+# correct. Namespaced under `ui:` so the UI can never touch Nautilus state. (Native msgbus→Redis
+# streaming is unavailable on the standard wheel — see #19; hence this thin in-node bridge.)
+[ui_bridge]
+enabled = true
+redis_host = "127.0.0.1"
+redis_port = 6379
+stream_key = "ui:stream"
+stream_maxlen = 200000         # approx XADD trim, headroom for the event/live planes (bars/fills/prices/
+#                                quotes/order-events). The latest-state planes (positions/orders/account/
+#                                health) NO LONGER flood this stream — #56 moved them to Redis keys
+#                                (ui:state:*, SET/overwrite, polled by the api), so bars can't be evicted.
+snapshot_interval_secs = 2     # cadence of the full position snapshot from the engine cache
+
+[engine]
+# kind: which NodeManager the app builds.
+#   "live"      — real TradingNode, bars from [data].provider (Alpaca; key via run-api.sh).
+#   "synthetic" — offline BacktestEngine with demo bars/positions (tests/CI; no key/network).
+# Override without editing: env KUMO_ENGINE=synthetic|live (tests force synthetic).
+kind = "live"
+trader_id = "PLATFORM-001"
+venue = "XNAS"
+
+# The engine's streamed universe = these symbols + any held positions. This IS the watchlist for now
+# (hardcoded, kept in sync with the UI watchlist tile). Later a Postgres watchlist store + a UI→engine
+# command channel will drive it dynamically (deferred on #20). Keep aligned with ui/src/config/layouts.ts.
+[universe]
+symbols = ["AAPL", "MSFT"]
+
+# Chart range → default candle (granularity). Adjustable in the UI; these are just the landing default.
+[chart.defaults]
+"1D" = "1m"
+"1W" = "1h"
+"1M" = "1d"
+"3M" = "1d"
+"1Y" = "1d"
+"5Y" = "1d"
+
+# How much history to load per candle type (the default range per candle). Tune freely.
+# These keys ALSO drive the engine's streamed granularity set (engine_node `_granularities`): every candle
+# type listed here is loaded (history) + streamed (live) per symbol. Windows are CALENDAR days; sized so
+# MA200 (200 bars) + Ichimoku Span B (52) can form at the live edge. Intraday bar counts (regular hours):
+#   5m≈78/day, 15m≈26/day, 30m≈13/day → the windows below clear ~250+ bars over the trading days spanned.
+# 5m/15m/30m/1h/1w tick live via INTERNAL trade aggregation; 1m/1d are native Alpaca live channels (#58).
+[chart.lookback_days]
+"1m" = 7
+"5m" = 7      # ~5 trading days × 78 ≈ 390 bars
+"15m" = 20    # ~14 trading days × 26 ≈ 364 bars
+"30m" = 40    # ~28 trading days × 13 ≈ 364 bars
+"1h" = 45
+"1d" = 300    # 300 CALENDAR days ≈ 214 trading days — MA200 (#181 Blue Flag c8) needs 200 TRADING bars;
+              # 200 calendar days only yields ~143 trading bars (weekends/holidays), leaving MA200 null
+              # most of the time (code review). Also covers the 78-bar minimum for #181's shifted cloud.
+"1w" = 1825   # ~260 weeks (5y) — latest MA200/Span B form; leftmost weeks are partial; also the "5Y" watchlist trend window

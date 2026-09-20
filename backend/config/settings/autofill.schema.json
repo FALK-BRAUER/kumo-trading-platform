@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order autofill & sizing",
+  "description": "Defaults the order ticket prefills entry/stop/target/size from. Every value is editable per-order; these set the starting point.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "riskMode": {
+      "type": "string",
+      "enum": ["fraction_of_equity", "fixed_usd"],
+      "default": "fraction_of_equity",
+      "title": "Risk mode",
+      "description": "How the per-trade risk budget is set: a fraction of account equity, or a fixed dollar amount."
+    },
+    "riskFraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.02,
+      "default": 0.005,
+      "title": "Risk per trade (fraction of equity)",
+      "description": "0.005 = 0.5% of equity risked per trade (used when risk mode = fraction_of_equity). Capped at 2% — live-safety discipline on the always-on MANUAL lane."
+    },
+    "riskUsd": {
+      "type": "number",
+      "minimum": 0,
+      "default": 500,
+      "title": "Risk per trade ($)",
+      "description": "Fixed dollar risk per trade (used when risk mode = fixed_usd)."
+    },
+    "maxPositionFraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.1,
+      "title": "Max position (fraction of equity)",
+      "description": "Cap a single position's notional at this fraction of equity (0.1 = 10%)."
+    },
+    "atrLookback": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 200,
+      "default": 14,
+      "title": "ATR lookback (bars)"
+    },
+    "atrMult": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 10,
+      "default": 1.0,
+      "title": "ATR stop multiple",
+      "description": "ATR-based stop distance = this × ATR from entry."
+    },
+    "percentStop": {
+      "type": "number",
+      "minimum": 0.001,
+      "maximum": 0.2,
+      "default": 0.01,
+      "title": "Percent stop distance",
+      "description": "Percent-based stop distance (0.01 = 1%)."
+    },
+    "targetR": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 10,
+      "default": 2.0,
+      "title": "Target (R multiple)",
+      "description": "Take-profit distance as a multiple of risk (entry→stop)."
+    },
+    "entryOffsetTicks": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 1,
+      "title": "Entry offset (ticks)"
+    },
+    "maxSpreadPct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 0.1,
+      "default": 0.005,
+      "title": "Max spread for mid entry",
+      "description": "Refuse a mid-price entry when the quote spread exceeds this fraction (IEX quotes run wide)."
+    },
+    "minShares": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "title": "Min shares"
+    },
+    "maxShares": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "title": "Max shares"
+    }
+  }
+}

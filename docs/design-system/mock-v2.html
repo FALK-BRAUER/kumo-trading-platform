@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kumo-trading-platform · design system v2</title>
+<style>
+  :root{
+    --bg:#060608; --bg2:#0a0a0d; --surf:#101014; --surf2:#15151b;
+    --line:#1d1d24; --line2:#2a2a33;
+    --t1:#e6e6ea; --t2:#9a9aa4; --t3:#63636d;
+    --bull:#4ade80; --bull-d:#0f2c1d; --bear:#f47171; --bear-d:#2c1417;
+    --watch:#f0b640; --info:#5aa9f0; --kijun:#e0982a;
+    --on-bull:#04140b; --on-bear:#2c0b0b; --on-info:#04121f; /* readable ink on the light dark-mode accents */
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  /* DAY mode — same semantic roles, values re-pitched for a white ground (deeper green/red for contrast). */
+  body.day{
+    --bg:#f6f6f8; --bg2:#eeeef1; --surf:#ffffff; --surf2:#f3f3f5;
+    --line:#e4e4e8; --line2:#d3d3d9;
+    --t1:#18181b; --t2:#52525b; --t3:#9a9aa4;
+    --bull:#159a46; --bull-d:#dcf5e5; --bear:#d63030; --bear-d:#fbe1e1;
+    --watch:#c07d12; --info:#2563eb; --kijun:#b7791f;
+    --on-bull:#fff; --on-bear:#fff; --on-info:#fff; /* white ink on the darker day accents */
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%} /* stop mobile Safari font-boosting wide tables */
+  body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--mono);
+    font-size:12px;line-height:1.35;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;
+    -webkit-text-size-adjust:100%;text-size-adjust:100%}
+  .wrap{max-width:820px;margin:0 auto;padding:20px 12px 70px}
+  .num{font-variant-numeric:tabular-nums}
+  .r{text-align:right} .pos{color:var(--bull)} .neg{color:var(--bear)} .mut{color:var(--t3)}
+
+  h1{font-size:16px;font-weight:700;margin:0;letter-spacing:-.01em}
+  .top{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+  .top .tag{color:var(--watch);border:1px solid color-mix(in srgb,var(--watch) 40%,transparent);border-radius:4px;padding:1px 6px;font-size:9px;letter-spacing:.06em}
+  .lead{color:var(--t2);font-size:11px;margin:0 0 22px}
+
+  .eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:9px;color:var(--t3);margin:26px 0 7px}
+
+  /* ACCOUNT HEADER */
+  .acct{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden}
+  .acct .hero{padding:13px 15px 11px}
+  .acct .heroline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .acct .nl-lbl{font-size:9px;letter-spacing:.12em;color:var(--t3);text-transform:uppercase}
+  .acct .nl{font-size:25px;font-weight:700;letter-spacing:-.02em;margin-top:1px}
+  .acct .day{text-align:right}
+  .acct .day .v{font-size:15px;font-weight:600}
+  .acct .status{font-size:9px;color:var(--t3);margin-top:5px;letter-spacing:.08em}
+  .acct .status b{color:var(--bull);font-weight:600}
+  .grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .grid6 .m{background:var(--surf);padding:8px 15px}
+  .grid6 .k{font-size:9px;letter-spacing:.08em;color:var(--t3);text-transform:uppercase}
+  .grid6 .val{font-size:13px;margin-top:1px}
+
+  /* metric toggle */
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden;margin:12px 0 6px}
+  .seg button{background:transparent;border:0;color:var(--t2);font-family:var(--mono);font-size:10px;letter-spacing:.04em;
+    padding:4px 10px;cursor:pointer;border-right:1px solid var(--line)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--surf2);color:var(--t1)}
+
+  /* TILE + TABLE */
+  .tile{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden;margin-bottom:16px}
+  .tile .head{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-bottom:1px solid var(--line)}
+  .tile .head .ttl{text-transform:uppercase;letter-spacing:.12em;font-size:10px;color:var(--t2);font-weight:600}
+  .tile .head .sum{font-size:10px;color:var(--t3)} .tile .head .sum b{color:var(--t1)}
+  table{width:100%;border-collapse:collapse}
+  thead th{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);font-weight:500;
+    padding:6px 13px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;text-align:right}
+  thead th.l{text-align:left}
+  thead th.on{color:var(--t1)} thead th .ar{opacity:.75;font-size:8px}
+  tbody td{padding:7px 13px;border-bottom:1px solid var(--line);white-space:nowrap;height:38px}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:var(--bg2)}
+  .sym{font-weight:700;font-size:12.5px} .exch{color:var(--t3);font-size:9px;margin-left:4px}
+  /* UNIFIED LIST ROW — every list tile: symbol first · main line + detail sub-line · 2 sizes (13 data / 10 tag+sub) · 3 greys */
+  .lt td{height:auto;border-bottom:0;padding:0 13px;font-size:13px}
+  .lt tr.lrow td{padding-top:9px;padding-bottom:2px}
+  .lt tr.lrow .sy{font-weight:700}
+  .lt tr.lsub td{padding-top:1px;padding-bottom:9px;border-bottom:1px solid var(--line);font-size:10px;color:var(--t3)}
+  .lt tbody tr:last-child td{border-bottom:0}
+  .lt tr.lsub .strat{color:var(--t2)}
+  .lt tbody tr:hover td{background:transparent}
+  /* frozen identity column — symbol pins on horizontal scroll */
+  .lt.stickcol td:first-child,.lt.stickcol th:first-child{position:sticky;left:0;background:var(--surf);z-index:2;box-shadow:1px 0 0 var(--line)}
+  /* signal as text, colour + label — never colour alone */
+  .sig{font-size:10px;letter-spacing:.05em;font-weight:600}
+  .sig.hold{color:var(--bull)} .sig.exit{color:var(--bear)} .sig.watchs{color:var(--watch)}
+  .sig .cl{color:var(--t3);font-weight:400}
+  /* transient tick flash (shown static here on Last) */
+  .tick-up{background:var(--bull-d);border-radius:3px;padding:1px 5px}
+  .tick-dn{background:var(--bear-d);border-radius:3px;padding:1px 5px}
+  /* P&L cell tint (not full row) */
+  td.pnl-pos{background:color-mix(in srgb,var(--bull) 8%,transparent)}
+  td.pnl-neg{background:color-mix(in srgb,var(--bear) 8%,transparent)}
+  /* StrategyTag — ONE consistent chip wherever a strategy is shown (orders, positions, watch). */
+  .strat{display:inline-block;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--t2);
+    border:1px solid var(--line2);border-radius:4px;padding:0 5px;white-space:nowrap;line-height:1.5}
+  .strat.none{color:var(--t3);border-color:var(--line);opacity:.6}
+  .spark{display:block} .spark polyline{fill:none;stroke-width:1.25}
+  .sp-up{stroke:var(--bull)} .sp-dn{stroke:var(--bear)} .sp-flat{stroke:var(--t3)}
+
+  /* SHIPPED (#180): multi-timeframe trend strip (below the KPI line) + multi-cloud chips (in the sub-line). */
+  .lt tr.lsub.nb td{border-bottom:0}
+  .lt tr.ltrend td{border-bottom:1px solid var(--line)}
+  .trends{display:flex;gap:12px;padding:3px 0 8px}
+  .tcell{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:30px}
+  .tcell .tlabel{font-size:8px;letter-spacing:.06em;color:var(--t3)}
+  /* SHIPPED (#182 follow-up): the configurable KPI line, right-aligned under the cloud-position line. */
+  .lt tr.lkpi td{border-bottom:1px solid var(--line);padding:0 13px 6px;font-size:9px;color:var(--t2);text-align:right}
+  /* Gear icon (#182 follow-up Phase 4/5) — tile-header trigger for the sort/filter/KPI-select popover. */
+  .gear{cursor:pointer;color:var(--t3);font-size:12px;padding:2px 4px;border-radius:4px}
+  .gear:hover{background:var(--surf2);color:var(--t1)}
+  .tcell .tpct{font-size:9px;font-family:var(--mono)}
+  .cloudchips{display:inline-flex;gap:7px;margin-left:8px}
+  .cchip{font-size:9px;font-family:var(--mono)}
+  .cchip .g{color:var(--t3)}
+  .cchip.abv{color:var(--bull)} .cchip.blw{color:var(--bear)} .cchip.in{color:var(--watch)}
+
+  /* ORDERS 2-line */
+  .ord{padding:9px 13px;border-bottom:1px solid var(--line)}
+  .ord:last-child{border-bottom:0}
+  .ord .l1{display:flex;align-items:center;gap:8px}
+  .glyph{font-size:11px;width:12px;text-align:center}
+  .g-work{color:var(--info)} .g-part{color:var(--watch)} .g-fill{color:var(--t2)} .g-rej{color:var(--bear)}
+  .side-b{color:var(--bull);font-weight:700;font-size:10px;letter-spacing:.05em} .side-s{color:var(--bear);font-weight:700;font-size:10px;letter-spacing:.05em}
+  .otype{color:var(--t2)} .oprice{color:var(--t1)} .otif{color:var(--t3);font-size:10px}
+  .ord .age{margin-left:auto;color:var(--t3);font-size:10px}
+  .ord .l2{margin-top:3px;padding-left:20px;font-size:10px;color:var(--t3);display:flex;gap:8px;flex-wrap:wrap}
+  .ord .l2 .tp{color:var(--bull)} .ord .l2 .sl{color:var(--bear)} .ord .l2 .st-work{color:var(--info)} .ord .l2 .st-rej{color:var(--bear)}
+  .ord.muted{opacity:.5}
+  .filters{display:flex;gap:6px;padding:8px 13px;border-bottom:1px solid var(--line);font-size:10px}
+  .filters .f{color:var(--t3);padding:2px 7px;border-radius:4px;cursor:pointer}
+  .filters .f.on{background:var(--surf2);color:var(--t1)}
+  /* Orders as a table on the same grid — main row + a muted detail sub-row (bracket legs / fill / reason). */
+  tr.ordr td{border-bottom:0;padding-top:8px;padding-bottom:2px}
+  tr.osub td{padding-top:1px;padding-bottom:9px;font-size:10px;color:var(--t3)}
+  tr.omut{opacity:.55}
+
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:10px;color:var(--t2);margin-top:6px}
+  .legend div{padding-left:13px;position:relative} .legend div::before{content:"–";position:absolute;left:0;color:var(--t3)}
+  .legend b{color:var(--t1);font-weight:600}
+  code{color:var(--bull);font-size:10px}
+  .rej{font-size:10px;color:var(--t2);line-height:1.7}
+  .rej b{color:var(--bear)}
+  .ovf{overflow-x:auto}
+
+  /* ORDER TICKET */
+  .tkt{border:1px solid var(--line);border-radius:10px;background:var(--surf);padding:13px;display:flex;flex-direction:column;gap:9px}
+  .tkt .trow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .tkt .lbl{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3)}
+  .cb{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--line2);background:transparent;color:var(--t2);cursor:pointer}
+  .cb.on{background:var(--surf2);color:var(--t1)}
+  .cb.buy{background:color-mix(in srgb,var(--bull) 16%,transparent);color:var(--bull);border-color:transparent}
+  .cb.soon{color:var(--t3);opacity:.45;cursor:not-allowed}
+  .tkt input{width:74px;background:var(--surf2);border:1px solid var(--line2);color:var(--t1);font-family:var(--mono);font-size:12px;border-radius:5px;padding:4px 7px;text-align:right}
+  .tkt .lvl{display:flex;flex-direction:column;gap:2px}
+  .tkt .lvl>span{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em}
+  .tkt .size{margin-left:auto;font-size:11px;color:var(--t2)}
+  .tkt .submit{margin-top:2px;background:color-mix(in srgb,var(--bull) 86%,black);color:#04140b;border:0;border-radius:6px;padding:9px;font-family:var(--mono);font-weight:700;font-size:12px;cursor:pointer;letter-spacing:.03em}
+  .sep{width:1px;height:15px;background:var(--line2);margin:0 3px}
+
+  /* INSTRUMENT DETAIL */
+  .det{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden}
+  .det .dh{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .det .nm{font-size:14px;font-weight:700} .det .ex{color:var(--t3);font-size:10px;margin-left:6px}
+  .det .sess{font-size:9px;color:var(--t3);letter-spacing:.05em;margin-top:3px}
+  .det .px{display:flex;align-items:flex-end;gap:10px;margin-top:7px}
+  .det .px .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+  .ba .c{background:var(--surf);padding:7px 14px;font-size:11px}
+  .k{font-size:9px;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+  .hlv{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+  .hlv .c{background:var(--surf);padding:7px 14px}
+  .depth .lv{display:grid;grid-template-columns:1fr 1fr;gap:1px;font-size:10.5px}
+  .dbid,.dask{position:relative;padding:4px 13px;background:var(--surf);overflow:hidden}
+  .dbid{text-align:right} .dbid .bar{position:absolute;right:0;top:0;bottom:0;background:color-mix(in srgb,var(--bull) 13%,transparent)}
+  .dask .bar{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--bear) 13%,transparent)}
+  .dbid>span,.dask>span{position:relative} .dbid .p{color:var(--bull)} .dask .p{color:var(--bear)}
+  .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+  .acts button{padding:11px;border:0;border-radius:7px;font-family:var(--mono);font-weight:700;font-size:13px;cursor:pointer}
+  .acts .b{background:color-mix(in srgb,var(--bull) 84%,black);color:#04140b} .acts .s{background:color-mix(in srgb,var(--bear) 80%,black);color:#fff}
+
+  /* VARIATIONS */
+  .vars{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}
+  .vcard{border:1px solid var(--line);border-radius:8px;background:var(--surf);padding:10px;min-height:58px}
+  .vt{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+  .skel{height:9px;border-radius:3px;background:var(--surf2);margin:5px 0}
+  .empty{color:var(--t3);font-size:10px;text-align:center;padding:8px}
+
+  /* SEMI-AUTO — ManagerBadge · LeashToggle state · ManagePanel · ProposalCard */
+  .mgr{display:inline-block;font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--info);border:1px solid color-mix(in srgb,var(--info) 40%,transparent);border-radius:4px;padding:0 5px;white-space:nowrap}
+  .leash{font-size:10px;letter-spacing:.05em;font-weight:600}
+  .leash.auto{color:var(--bull)} .leash.confirm{color:var(--watch)} .leash.alert{color:var(--info)}
+  .mpanel{border:1px solid var(--line);border-radius:8px;background:var(--surf);padding:11px 12px;font-size:10px;color:var(--t3)}
+  .prop{border:1px solid color-mix(in srgb,var(--watch) 30%,transparent);border-radius:8px;padding:9px 10px;background:color-mix(in srgb,var(--watch) 5%,transparent);margin-bottom:8px}
+  .prop:last-child{margin-bottom:0}
+  .prop .ph{font-size:9px;color:var(--watch);letter-spacing:.07em;margin-bottom:3px;white-space:nowrap}
+  .prop .pb{font-size:11px;color:var(--t2)}
+  /* per-position automation panel — toggle per action + mode + state */
+  .apanel .ahd{display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--line);font-size:12px}
+  .arow{display:flex;align-items:center;gap:9px;padding:8px 13px;border-bottom:1px solid var(--line);font-size:11px}
+  .arow:last-child{border-bottom:0} .arow.aoff{opacity:.55}
+  .sw2{width:30px;height:16px;border-radius:9px;background:var(--surf2);border:1px solid var(--line2);position:relative;flex:none;cursor:pointer}
+  .sw2.swon{background:color-mix(in srgb,var(--bull) 35%,transparent);border-color:transparent}
+  .sw2 .kn{position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:var(--t3)}
+  .sw2.swon .kn{left:15px;background:var(--bull)}
+  .arow .an2{width:120px;white-space:nowrap} .arow .ap{flex:1;color:var(--t3);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mode{display:inline-flex;border:1px solid var(--line2);border-radius:4px;overflow:hidden;font-size:9px;flex:none}
+  .mode span{padding:1px 6px;color:var(--t3);cursor:pointer} .mode span.mon{background:var(--surf2);color:var(--t1)}
+  .stb{font-size:9px;padding:1px 6px;border-radius:4px;white-space:nowrap;flex:none}
+  .stb.wb{background:color-mix(in srgb,var(--info) 15%,transparent);color:var(--info)}
+  .stb.ab{background:color-mix(in srgb,var(--bull) 15%,transparent);color:var(--bull)}
+  .stb.ob{color:var(--t3)}
+
+  /* HOME / PORTFOLIO RISK */
+  .home{display:flex;flex-direction:column;gap:11px}
+  .pnl4{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .pnl4 .c{background:var(--surf);padding:9px 12px}
+  .risk{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden}
+  .risk .h{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-bottom:1px solid var(--line)}
+  .risk .ht{text-transform:uppercase;letter-spacing:.12em;font-size:10px;color:var(--t2);font-weight:600}
+  .risk .warn{color:var(--watch);font-size:9px;letter-spacing:.04em;font-weight:600}
+  .risk .body{padding:12px 13px;display:flex;flex-direction:column;gap:13px}
+  .risk .three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .conc{display:flex;flex-direction:column;gap:6px}
+  .cbar{display:flex;align-items:center;gap:8px;font-size:10px}
+  .cbar .lb{width:60px;color:var(--t2)} .cbar .pc{width:32px;text-align:right;color:var(--t2)}
+  .track{flex:1;height:6px;border-radius:3px;background:var(--surf2);overflow:hidden}
+  .fill{height:100%;background:var(--info)} .fill.over{background:var(--watch)}
+  .heatstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:5px}
+  .heatcell{border:1px solid var(--line);border-radius:8px;padding:9px;position:relative;overflow:hidden}
+  .heatcell .hb{position:absolute;left:0;top:0;bottom:0;opacity:.13}
+  .heatcell>div{position:relative}
+  .edge{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;margin-top:5px}
+
+  /* CHART — the token-bound Ichimoku surface (colours are tokens, so day/night flips them) */
+  .chart{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden}
+  .chart .ctrl{display:flex;gap:4px;padding:7px 11px;border-bottom:1px solid var(--line);font-size:9px;flex-wrap:wrap}
+  .chart .ctrl .c2{color:var(--t3);padding:2px 6px;border-radius:4px;cursor:pointer;letter-spacing:.03em}
+  .chart .ctrl .c2.on{background:var(--surf2);color:var(--t1)} .chart .ctrl .sepc{color:var(--line2);padding:0 2px}
+  .chart .lg{display:flex;flex-wrap:wrap;gap:9px;padding:6px 11px;border-bottom:1px solid var(--line);font-size:9px}
+  .cx-tk{color:var(--info)} .cx-kj{color:var(--kijun)} .cx-sa{color:var(--bull)} .cx-sb{color:var(--bear)} .cx-ck{color:var(--t3)} .cx-ma{color:#a78bdf}
+  .chart svg{display:block;width:100%;height:auto}
+  .c-up{fill:var(--bull);stroke:var(--bull)} .c-dn{fill:var(--bear);stroke:var(--bear)}
+  .c-tk{stroke:var(--info);fill:none;stroke-width:1.2} .c-kj{stroke:var(--kijun);fill:none;stroke-width:1.2}
+  .cloud-bull{fill:var(--bull);opacity:.15} .c-ma{stroke:#a78bdf;fill:none;stroke-width:1.1}
+  .c-vol{fill:var(--t3);opacity:.35}
+  .c-sl{stroke:var(--bear);stroke-dasharray:3 3;stroke-width:1;fill:none} .c-tp{stroke:var(--bull);stroke-dasharray:3 3;stroke-width:1;fill:none}
+  .c-fill{fill:var(--bull)} .c-axis{fill:var(--t3)} .c-grid{stroke:var(--line);stroke-width:.5}
+  .clbl{font-family:var(--mono);font-size:7px}
+  .cvar{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .cvar .v{border:1px solid var(--line);border-radius:8px;background:var(--surf);padding:8px;overflow:hidden}
+  .cvar .vt2{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;white-space:nowrap}
+
+  /* BOARD CHROME — top bar + tabs */
+  .topbar{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf)}
+  .topbar .brand{font-weight:700;font-size:13px;white-space:nowrap}
+  .topbar .searchbox{flex:1;background:var(--surf2);border:1px solid var(--line2);border-radius:6px;padding:5px 9px;color:var(--t3);font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .armed{font-size:9px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:5px;white-space:nowrap;cursor:pointer;border:1px solid transparent}
+  .armed.on{background:color-mix(in srgb,var(--bull) 16%,transparent);color:var(--bull);border-color:color-mix(in srgb,var(--bull) 40%,transparent)}
+  .armed.off{background:color-mix(in srgb,var(--bear) 14%,transparent);color:var(--bear);border-color:color-mix(in srgb,var(--bear) 40%,transparent)}
+  .tabs{display:flex;gap:2px;margin-top:9px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tabs .t{font-size:11px;color:var(--t3);padding:7px 11px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+  .tabs .t.on{color:var(--t1);border-bottom-color:var(--bull);font-weight:600}
+  .burger{font-size:15px;color:var(--t2);cursor:pointer;padding:0 3px 0 0;line-height:1}
+  .drawer{border:1px solid var(--line2);border-radius:10px;background:var(--surf);overflow:hidden;margin-top:8px;max-width:300px}
+  .drawer .dg{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);padding:9px 13px 3px}
+  .drawer .di{display:flex;align-items:center;gap:9px;padding:7px 13px;font-size:12px;color:var(--t2);cursor:pointer;white-space:nowrap}
+  .drawer .di.on{color:var(--t1);background:var(--bg2)} .drawer .di .ic{width:14px;text-align:center;color:var(--t3)}
+  .sdrop{border:1px solid var(--line2);border-radius:8px;background:var(--surf);overflow:hidden;margin-top:7px}
+  .sdrop .r2{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--line)}
+  .sdrop .r2:last-child{border-bottom:0} .sdrop .sy2{font-weight:700;font-size:12px} .sdrop .nm2{color:var(--t3);font-size:10px}
+  .sdrop .sacts{margin-left:auto;display:inline-flex;gap:6px;align-items:center}
+  .sdrop .add{font-size:9px;color:var(--bull);border:1px solid color-mix(in srgb,var(--bull) 40%,transparent);border-radius:4px;padding:1px 6px;white-space:nowrap;cursor:pointer}
+  .sdrop .eye{font-size:9px;color:var(--info);border:1px solid color-mix(in srgb,var(--info) 35%,transparent);border-radius:4px;padding:1px 6px;white-space:nowrap;cursor:pointer}
+  /* SETTINGS */
+  .settings{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden}
+  .settings .sec{padding:11px 13px;border-bottom:1px solid var(--line)} .settings .sec:last-child{border-bottom:0}
+  .settings .st{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--t2);font-weight:600;margin-bottom:8px}
+  .fld{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:6px} .fld:last-child{margin-bottom:0}
+  .fld .fl{flex:1;color:var(--t2)} .fld .fv{background:var(--surf2);border:1px solid var(--line2);border-radius:5px;padding:3px 8px;font-family:var(--mono);font-size:11px;color:var(--t1);min-width:70px;text-align:right}
+  /* SAFETY — confirm + kill */
+  .dlg{border:1px solid color-mix(in srgb,var(--bear) 35%,transparent);border-radius:10px;background:color-mix(in srgb,var(--bear) 6%,transparent);padding:13px}
+  .dlg .dt{font-size:12px;font-weight:700;color:var(--bear)} .dlg .db{font-size:11px;color:var(--t2);margin:5px 0 11px}
+  .killbtn{background:color-mix(in srgb,var(--bear) 85%,black);color:#fff;border:0;border-radius:7px;padding:10px 14px;font-family:var(--mono);font-weight:700;font-size:12px;cursor:pointer;letter-spacing:.06em}
+  /* SLIDE-TO-CONFIRM — the commit gesture. Every action that COMMITS money or DESTROYS state slides
+     (buy/sell/exit/flatten/cancel/delete/disarm); a TAP never fires it. Drag thumb past ~90% → commit; released
+     before → snap back. --p (0..1) drives fill + thumb here statically; runtime binds it to drag progress. */
+  .slide{--p:0;position:relative;height:48px;border-radius:11px;border:1px solid var(--line2);background:var(--surf2);overflow:hidden;user-select:none}
+  .slide .sfill{position:absolute;top:0;bottom:0;left:0;border-radius:11px;width:calc(44px + var(--p) * (100% - 44px))}
+  .slide.buy .sfill{background:color-mix(in srgb,var(--bull) 20%,transparent)}
+  .slide.sell .sfill,.slide.danger .sfill{background:color-mix(in srgb,var(--bear) 20%,transparent)}
+  .slide.neutral .sfill{background:color-mix(in srgb,var(--info) 20%,transparent)}
+  .slide .slbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-start;text-align:left;
+    padding:0 14px 0 54px;font-size:11px;font-weight:600;letter-spacing:.03em;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .slide .sthumb{position:absolute;top:2px;left:calc(2px + var(--p) * (100% - 48px));height:44px;width:44px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.35);cursor:grab}
+  .slide.buy .sthumb{background:var(--bull);color:var(--on-bull)} .slide.sell .sthumb,.slide.danger .sthumb{background:var(--bear);color:var(--on-bear)}
+  .slide.neutral .sthumb{background:var(--info);color:var(--on-info)}
+  /* commit label stays HIGH-CONTRAST (t1) — fill/thumb carry intent; label never green-on-green (contrast) */
+  .slide.commit .slbl{color:var(--t1);font-weight:700}
+  .slide.locked{opacity:.5;cursor:not-allowed} .slide.locked .sthumb{background:var(--line2);color:var(--t3);cursor:not-allowed} .slide.locked .slbl{color:var(--bear)}
+  .slide.pending .sthumb{background:var(--surf2);color:var(--t2);border:1px solid var(--line2)}
+  .slide-hint{font-size:9.5px;color:var(--t3);margin-top:5px;line-height:1.6}
+  .slide-hint b{color:var(--t2);font-weight:600}
+  .slidegrid{display:flex;flex-direction:column;gap:9px}
+  .slidegrid .sl-l{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:3px}
+  /* SLIDE-TO-DELETE — a destructive row action (watchlist, #64): the row follows the finger; release past the threshold fires. */
+  .swipe{position:relative;overflow:hidden;border-radius:8px;border:1px solid var(--line);background:color-mix(in srgb,var(--bear) 80%,black)}
+  .swipe .swact{position:absolute;top:0;bottom:0;right:0;width:84px;display:flex;align-items:center;justify-content:center;gap:5px;color:#fff;font-size:10px;font-weight:700;letter-spacing:.05em}
+  .swipe .swrow{position:relative;background:var(--surf);padding:9px 12px;display:flex;align-items:center;gap:9px;transform:translateX(calc(-1 * var(--sw,0px)))}
+  .swipe .swrow .sy3{font-weight:700;font-size:12.5px}
+  /* ALERTS */
+  .toast{display:flex;align-items:center;gap:8px;border-radius:8px;padding:9px 11px;font-size:11px;margin-bottom:7px;border:1px solid var(--line);color:var(--t2)}
+  .toast:last-child{margin-bottom:0}
+  .toast.ok{background:color-mix(in srgb,var(--bull) 8%,transparent);border-color:color-mix(in srgb,var(--bull) 28%,transparent)}
+  .toast.bad{background:color-mix(in srgb,var(--bear) 8%,transparent);border-color:color-mix(in srgb,var(--bear) 28%,transparent)}
+  .toast.warnt{background:color-mix(in srgb,var(--watch) 8%,transparent);border-color:color-mix(in srgb,var(--watch) 28%,transparent)}
+  .toast .tt{margin-left:auto;color:var(--t3);font-size:9px;white-space:nowrap}
+  /* CYCLE DRILLDOWN */
+  .cyc{border-left:2px solid var(--line2);padding:2px 0 2px 11px;margin:2px 0 8px 6px;font-size:10px;color:var(--t3)}
+  .cyc .leg{display:flex;gap:8px;padding:3px 0} .cyc .leg .lst{width:56px;font-weight:600}
+  .cyc .leg .held{color:var(--bull)} .cyc .leg .closed{color:var(--t3)}
+  /* order-row actions */
+  .oact{display:inline-flex;gap:4px;margin-left:auto}
+  .oact button{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid var(--line2);background:transparent;color:var(--t2);cursor:pointer}
+  .oact button.warn{color:var(--bear);border-color:color-mix(in srgb,var(--bear) 35%,transparent)}
+  /* correlation mini + sleeves */
+  .corr{display:grid;grid-template-columns:auto repeat(3,1fr);gap:2px;font-size:9px}
+  .corr div{padding:4px 6px;text-align:center;border-radius:3px}
+  .corr .hd{color:var(--t3)} .corr .cell{color:var(--t1)}
+  /* DESKTOP BOARD PREVIEW */
+  .deskwrap{overflow-x:auto;border:1px dashed var(--line2);border-radius:10px;padding:8px;background:var(--bg2)}
+  .desk{width:900px;display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:26px;gap:6px}
+  .dt{border:1px solid var(--line);border-radius:7px;background:var(--surf);padding:6px 8px;overflow:hidden}
+  .dt .dth{font-size:8px;letter-spacing:.1em;color:var(--t3);text-transform:uppercase;margin-bottom:3px;white-space:nowrap}
+  .dt .dl{font-size:9px;color:var(--t2);line-height:1.6;white-space:nowrap}
+  .dt .dl .pos{color:var(--bull)} .dt .dl .neg{color:var(--bear)}
+  /* JOURNAL */
+  .jrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px}
+  .jrow:last-child{border-bottom:0}
+  .jtag{font-size:9px;color:var(--info);border:1px solid color-mix(in srgb,var(--info) 35%,transparent);border-radius:4px;padding:0 5px;white-space:nowrap}
+  .jrate{margin-left:auto;font-size:10px;white-space:nowrap}
+  /* RECON */
+  .recon{display:grid;grid-template-columns:1.3fr 1fr 1fr auto;gap:5px 10px;font-size:11px;align-items:center}
+  .recon .rh{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em}
+  .recon .diff{color:var(--bear);font-weight:600}
+  /* ANALYTICS */
+  .an{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px}
+  .an .k{margin-bottom:1px}
+
+  /* No line-breaks in compact labels/values — shorten the word before you let it wrap. */
+  .grid6 .k,.k,.nl-lbl,.cell .lbl,.tkt .lvl>span,.vt,.tile .head .ttl,.acct .status,.det .sess,.cbar .lb,.risk .warn{white-space:nowrap}
+
+  /* Order status badge — status is never hidden; terminal states are prominent (colour + label). */
+  .ost{font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .ost.work{background:color-mix(in srgb,var(--info) 18%,transparent);color:var(--info)}
+  .ost.fill{background:color-mix(in srgb,var(--bull) 16%,transparent);color:var(--bull)}
+  .ost.deny,.ost.rej{background:color-mix(in srgb,var(--bear) 26%,transparent);color:var(--bear);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--bear) 45%,transparent)}
+  /* Detail surfaces — one per (tab × strategy) */
+  .dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .dh2{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surf2)}
+  .dtab{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--t2)}
+  .dnm{padding:8px 12px 2px;font-size:14px;font-weight:700}
+  .drow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 12px;font-size:11px}
+  .drow .k{align-self:center}
+  .dmini{margin:6px 12px;height:34px;border-radius:5px;background:linear-gradient(180deg,color-mix(in srgb,var(--info) 10%,transparent),transparent);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--t3)}
+  .dstat{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 12px 8px}
+  .dtl{padding:2px 12px 6px;font-size:10px}
+  .tlrow{display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)}
+  .tlrow:last-child{border-bottom:0}
+  .tlrow.done>span:first-child{color:var(--t2)} .tlrow.deny>span:first-child{color:var(--bear);font-weight:600}
+  /* REGISTRY PROOF — "same slot, swapped impl by config": ONE fixed frame (tinted header + action bands = the
+     invariant identity), the middle body = the swap zone. Repeating the shell is the cue these are one slot, not 3 screens. */
+  .slotgrp{border:1px solid var(--line);border-radius:10px;background:var(--surf);overflow:hidden;margin-bottom:10px}
+  .slot-hd{display:flex;align-items:baseline;gap:9px;padding:9px 13px;border-bottom:1px solid var(--line);background:var(--surf2);flex-wrap:wrap}
+  .slot-hd .sname{font-size:13px;font-weight:700;letter-spacing:.02em}
+  .slot-hd .smech{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--info)}
+  .slotrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:1px;background:var(--line)}
+  .slot-zone{padding:3px 13px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--t3);border-bottom:1px solid var(--line);background:var(--bg2)}
+  .slot-zone b{color:var(--info)}
+  .slotcard .vfoot.inv{color:var(--t3);font-size:9px;text-align:center}
+  .slotcard{background:var(--surf);display:flex;flex-direction:column}
+  .slotcard .vhd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 11px;background:var(--surf2);border-bottom:1px dashed var(--line2)}
+  .slotcard .vname{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--t1);white-space:nowrap}
+  .slotcard .vkey{font-size:9px;color:var(--t3);white-space:nowrap}
+  .slotcard .vbody{padding:9px 11px;flex:1;display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--t2)}
+  .slotcard .vfoot{padding:8px 11px;border-top:1px dashed var(--line2);background:var(--surf2)}
+  .mini-slide{position:relative;height:32px;border-radius:7px;background:color-mix(in srgb,var(--bull) 18%,transparent);display:flex;align-items:center;padding-left:34px;font-size:9.5px;font-weight:700;color:var(--t1)}
+  .mini-slide::after{content:"\203a\203a";position:absolute;left:3px;top:3px;width:26px;height:26px;border-radius:5px;background:color-mix(in srgb,var(--bull) 88%,black);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .li-r{padding:7px 11px;border-bottom:1px solid var(--line)} .li-r:last-child{border-bottom:0}
+  .li-r .li-m{display:flex;align-items:center;gap:6px} .li-r .li-m .sy{font-weight:700;font-size:12px}
+  .li-r .li-s{font-size:9px;color:var(--t3);margin-top:2px}
+  /* TABLE CONTROLS — SortHeader (tap column → sort, tap again → flip) + a mobile Sort menu + FilterChips */
+  .sh{cursor:pointer;color:var(--t3);font-weight:500;letter-spacing:.03em;white-space:nowrap}
+  .sh.on{color:var(--t1);font-weight:700}
+  .sh .ar{font-size:8px;opacity:.75} .sh .ar.idle{opacity:.6;letter-spacing:-2px}
+  .sortmenu{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:6px;padding:4px 9px;font-size:10px;color:var(--t2);background:var(--surf2);cursor:pointer;white-space:nowrap}
+  .sortdrop{border:1px solid var(--line2);border-radius:7px;background:var(--surf);overflow:hidden;margin-top:5px;max-width:200px}
+  .sortdrop div{padding:6px 11px;font-size:10px;color:var(--t2);border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;gap:12px}
+  .sortdrop div:last-child{border-bottom:0} .sortdrop div.on{color:var(--t1);background:var(--bg2)} .sortdrop .dir{color:var(--info)}
+  /* MANAGE TICKET (order.manage) — net-impact preview + ask-each-add stop-alignment choice */
+  .netimp{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .netimp .c{background:var(--surf2);padding:6px 10px} .netimp .c .k{font-size:8px} .netimp .c .v{font-size:12px;font-weight:600;margin-top:1px}
+  .choice{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line2);border-radius:7px;font-size:10px;color:var(--t2);cursor:pointer}
+  .choice.on{border-color:color-mix(in srgb,var(--info) 55%,transparent);background:color-mix(in srgb,var(--info) 8%,transparent);color:var(--t1)}
+  .choice .rd{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--t3);flex:none}
+  .choice.on .rd{border-color:var(--info);background:var(--info);box-shadow:inset 0 0 0 2.5px var(--surf)}
+  .choice .warnx{color:var(--bear);font-weight:600}
+  /* saga states — a size change is add-fill + cancel-replace-stop, multi-step + can partially fail. Show it honestly. */
+  .sagast{font-size:9.5px;color:var(--t3);padding:5px 9px;border-radius:6px;border:1px solid var(--line);background:var(--surf2)} .sagast b{color:var(--t2)}
+  .sagast.ok{border-color:color-mix(in srgb,var(--bull) 30%,transparent);background:color-mix(in srgb,var(--bull) 7%,transparent)} .sagast.ok b{color:var(--bull)}
+  .sagast.bad{border-color:color-mix(in srgb,var(--bear) 42%,transparent);background:color-mix(in srgb,var(--bear) 8%,transparent);color:var(--t2)} .sagast.bad b{color:var(--bear)}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1>kumo-trading-platform · design system v2</h1>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="tag">PERPLEXITY × CODEX</span>
+      <button id="theme" onclick="document.body.classList.toggle('day')"
+        style="background:var(--surf2);border:1px solid var(--line2);color:var(--t2);font-family:var(--mono);font-size:10px;padding:4px 9px;border-radius:6px;cursor:pointer;letter-spacing:.05em">◐ DAY / NIGHT</button>
+    </div>
+  </div>
+  <p class="lead">Table-first dark terminal. Colour never alone (every state carries a label). Muted green/red on near-black. P&amp;L tints the <em>cell</em>, not the row. Sparklines on the watch only. Side = coloured text, status = a tiny glyph, price flashes on tick.</p>
+
+  <!-- BOARD CHROME + HAMBURGER NAV -->
+  <div class="eyebrow">Navigation — ☰ hamburger + primary tabs (frequent) + drawer (overflow); scales as surfaces grow (#7)</div>
+  <div class="topbar">
+    <span class="burger">☰</span><span class="brand">kumo-trading-platform</span>
+    <span class="searchbox">Search ticker or company…</span>
+    <span class="armed on" title="orders armed">● ARMED</span>
+  </div>
+  <div class="tabs">
+    <span class="t on">Home</span><span class="t">Watch</span><span class="t">Orders</span><span class="t">Positions</span>
+  </div>
+  <div class="drawer">
+    <div class="dg">Trade</div>
+    <div class="di on"><span class="ic">◧</span>Home</div><div class="di"><span class="ic">◔</span>Watch</div><div class="di"><span class="ic">▤</span>Orders</div><div class="di"><span class="ic">▦</span>Positions</div>
+    <div class="dg">Automate</div>
+    <div class="di"><span class="ic">⌁</span>Managers</div>
+    <div class="dg">Review</div>
+    <div class="di"><span class="ic">✎</span>Journal</div><div class="di"><span class="ic">≣</span>Analytics</div><div class="di"><span class="ic">⇄</span>Reconciliation</div><div class="di"><span class="ic">◔</span>Alerts</div>
+    <div class="dg">Config</div>
+    <div class="di"><span class="ic">⚙</span>Settings</div><div class="di"><span class="ic">⏱</span>Session rules</div><div class="di"><span class="ic">⏻</span>Safety · arm / kill</div>
+  </div>
+  <div class="mut" style="font-size:10px;margin-top:6px"><b>Primary tabs</b> = the frequent surfaces. The <b>☰ drawer</b> entries are <b>REGISTERED menu items → each opens a tab-set (a "work center")</b> — flexible, config-driven, same registry philosophy as tiles/actions (not a hardcoded IBKR-style bolt-on menu). Selecting a work center swaps the tab-set below. <i>(Flexible nav = a later ticket.)</i></div>
+
+  <!-- SYMBOL SEARCH -->
+  <div class="eyebrow" style="margin-top:16px">Symbol search — results dropdown (#25)</div>
+  <div class="topbar"><span class="searchbox" style="color:var(--t1)">AAP▏</span></div>
+  <div class="sdrop">
+    <div class="r2"><span class="sy2">AAPL</span><span class="nm2">Apple Inc · NASDAQ</span><span class="sacts"><span class="eye">◉ View</span><span class="add">＋ Watch</span></span></div>
+    <div class="r2"><span class="sy2">AAP</span><span class="nm2">Advance Auto Parts · NYSE</span><span class="sacts"><span class="eye">◉ View</span><span class="add">＋ Watch</span></span></div>
+    <div class="r2"><span class="sy2">AAPU</span><span class="nm2">Direxion AAPL Bull 2× · ARCA</span><span class="sacts"><span class="eye">◉ View</span><span class="add">＋ Watch</span></span></div>
+  </div>
+
+  <!-- HOME / RISK -->
+  <div class="eyebrow" style="margin-top:16px">Home — landing surface, carries portfolio risk (predecessor-repo pattern → cross-strategy)</div>
+  <div class="home">
+    <div class="pnl4">
+      <div class="c"><div class="k">Realized</div><div class="val mut">$0.00</div></div>
+      <div class="c"><div class="k">Secured</div><div class="val pos">+$310</div></div>
+      <div class="c"><div class="k">Unrealized</div><div class="val neg">−$21.15</div></div>
+      <div class="c"><div class="k">Net day</div><div class="val pos">+$74.30</div></div>
+    </div>
+    <div class="risk">
+      <div class="h"><span class="ht">Portfolio risk</span></div>
+      <div class="body">
+        <div class="three">
+          <div><div class="k">Max loss @ −3%</div><div class="val neg" style="font-size:15px">−$842</div></div>
+          <div><div class="k">Secured</div><div class="val pos" style="font-size:15px">+$310</div></div>
+          <div><div class="k">Deployed</div><div class="val" style="font-size:15px">$14.2k · 36%</div></div>
+        </div>
+        <div class="conc">
+          <div class="k">Sector concentration · cap 50%</div>
+          <div class="cbar"><span class="lb">Semis</span><div class="track"><div class="fill over" style="width:54%"></div></div><span class="pc">54%</span></div>
+          <div class="cbar"><span class="lb">Health</span><div class="track"><div class="fill" style="width:22%"></div></div><span class="pc">22%</span></div>
+          <div class="cbar"><span class="lb">Energy</span><div class="track"><div class="fill" style="width:14%"></div></div><span class="pc">14%</span></div>
+        </div>
+        <div>
+          <div class="k">Heat by strategy · portfolio-wide cap 3% (#80)</div>
+          <div class="heatstrip">
+            <div class="heatcell"><div class="hb" style="background:var(--bear);width:60%"></div><div class="k">MANUAL</div><div style="font-size:13px">1.8%</div></div>
+            <div class="heatcell"><div class="hb" style="background:var(--watch);width:30%"></div><div class="k">MOMENTUM</div><div style="font-size:13px">0.9%</div></div>
+            <div class="heatcell"><div class="hb" style="background:var(--bull);width:10%"></div><div class="k">ETF_AUTO</div><div style="font-size:13px">0.3%</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="k">Edge · last 20 trades</div>
+          <div class="edge">
+            <div><div class="k">Win</div><div class="pos">62%</div></div>
+            <div><div class="k">Expectancy</div><div>+0.4R</div></div>
+            <div><div class="k">Avg win</div><div class="pos">+$210</div></div>
+            <div><div class="k">Avg loss</div><div class="neg">−$130</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT HEADER -->
+  <div class="eyebrow">Account summary — Portfolio header (collapsible)</div>
+  <div class="acct">
+    <div class="hero">
+      <div class="heroline">
+        <div><div class="nl-lbl">Net liquidation</div><div class="nl">$39,546</div></div>
+        <div class="day"><div class="nl-lbl">Day P&amp;L</div><div class="v pos">+$74.30</div><div class="mut" style="font-size:11px">+0.19%</div></div>
+      </div>
+      <div class="status">PAPER · ALPACA · <b>MANUAL armed</b> · 2 open · 1 working</div>
+    </div>
+    <div class="grid6">
+      <div class="m"><div class="k">Unrealized</div><div class="val neg">−$21.15</div></div>
+      <div class="m"><div class="k">Realized</div><div class="val mut">$0.00</div></div>
+      <div class="m"><div class="k">Mkt value</div><div class="val">$25,832</div></div>
+      <div class="m"><div class="k">Deployed</div><div class="val">$14,208</div></div>
+      <div class="m"><div class="k">Engaged</div><div class="val">$24,177</div></div>
+      <div class="m"><div class="k">Buy power</div><div class="val">$232,579</div></div>
+    </div>
+  </div>
+  <div class="seg"><button class="on">Last / Chg%</button><button>D-P&amp;L</button><button>U-P&amp;L</button><button>Mkt Val</button></div>
+
+  <!-- WATCHLIST (shipped — VWAP own column #182, KPI line + gear icon sort/filter/KPI-select #182 follow-up
+       Phase 4/5, multi-timeframe trend + multi-cloud #180. Was 2 mocks — "base" + "proposal, NOT built" —
+       collapsed into one now that all of it has shipped.) -->
+  <div class="eyebrow">Watchlist — symbol-first, main line + Ichimoku sub-line + KPI line · VWAP is its own column (Operator: "deserves a true column") · gear icon = sort + filter + KPI-select, no permanent filter-chip row</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Watchlist</span><span style="display:flex;align-items:center;gap:10px"><span class="sum"><b>17</b> symbols</span><span class="gear" title="Sort / filter / KPIs">⚙</span></span></div>
+    <div class="ovf"><table class="lt">
+      <thead><tr><th class="l">Symbol</th><th class="l">Sig</th><th>VWAP</th><th>Chg%</th><th class="on">Last <span class="ar">▲</span></th><th class="l">Trend</th></tr></thead>
+      <tbody>
+        <tr class="lrow"><td class="l sy">JNJ</td><td class="l"><span class="sig hold">HOLD</span></td>
+          <td class="r mut">256.09</td><td class="r pos">+0.24</td><td class="r"><span class="tick-up">256.46</span></td>
+          <td class="l"><svg class="spark" width="60" height="16"><polyline class="sp-up" points="0,12 10,11 20,13 30,8 40,9 50,5 60,4"/></svg></td></tr>
+        <tr class="lsub nb"><td colspan="6" class="l">TK 260.35 · KJ 258.06 · Cld 259.21<span class="cloudchips"><span class="cchip blw">15m▼</span><span class="cchip blw">1h▼</span><span class="cchip in">1d●</span></span></td></tr>
+        <tr class="lkpi"><td colspan="6">Vol 263.1K · MCap 617.8B · P/E 23.2</td></tr>
+        <tr class="ltrend"><td colspan="6">
+          <div class="trends">
+            <div class="tcell"><span class="tlabel">1H</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,9 8,8 15,10 22,6 30,4"/></svg><span class="tpct pos">+0.23%</span></div>
+            <div class="tcell"><span class="tlabel">1D</span><svg class="spark" width="30" height="13"><polyline class="sp-dn" points="0,3 8,5 15,7 22,10 30,12"/></svg><span class="tpct neg">−2.24%</span></div>
+            <div class="tcell"><span class="tlabel">1W</span><svg class="spark" width="30" height="13"><polyline class="sp-dn" points="0,2 8,4 15,7 22,9 30,12"/></svg><span class="tpct neg">−4.15%</span></div>
+            <div class="tcell"><span class="tlabel">1M</span><svg class="spark" width="30" height="13"><polyline class="sp-dn" points="0,3 8,6 15,6 22,9 30,11"/></svg><span class="tpct neg">−2.50%</span></div>
+            <div class="tcell"><span class="tlabel">1Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,10 15,6 22,7 30,2"/></svg><span class="tpct pos">+47.97%</span></div>
+            <div class="tcell"><span class="tlabel">5Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,13 8,11 15,9 22,5 30,1"/></svg><span class="tpct pos">+45.49%</span></div>
+          </div></td></tr>
+
+        <tr class="lrow"><td class="l sy">PENG</td><td class="l"><span class="sig exit">EXIT</span></td>
+          <td class="r mut">52.54</td><td class="r pos">+2.16</td><td class="r"><span class="tick-up">52.56</span></td>
+          <td class="l"><svg class="spark" width="60" height="16"><polyline class="sp-dn" points="0,4 10,6 20,5 30,9 40,11 50,14 60,15"/></svg></td></tr>
+        <tr class="lsub nb"><td colspan="6" class="l">TK 52.53 · KJ 66.69 · Cld 66.21<span class="cloudchips"><span class="cchip in">15m●</span><span class="cchip abv">1h▲</span><span class="cchip blw">1d▼</span></span></td></tr>
+        <tr class="lkpi"><td colspan="6">Vol 87.2K · MCap 2.7B</td></tr>
+        <tr class="ltrend"><td colspan="6">
+          <div class="trends">
+            <div class="tcell"><span class="tlabel">1H</span><svg class="spark" width="30" height="13"><polyline class="sp-dn" points="0,4 8,6 15,5 22,9 30,11"/></svg><span class="tpct neg">−0.53%</span></div>
+            <div class="tcell"><span class="tlabel">1D</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,11 15,13 22,8 30,4"/></svg><span class="tpct pos">+5.67%</span></div>
+            <div class="tcell"><span class="tlabel">1W</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,11 8,9 15,8 22,6 30,4"/></svg><span class="tpct pos">+3.81%</span></div>
+            <div class="tcell"><span class="tlabel">1M</span><svg class="spark" width="30" height="13"><polyline class="sp-dn" points="0,3 8,6 15,6 22,9 30,11"/></svg><span class="tpct neg">−14.37%</span></div>
+            <div class="tcell"><span class="tlabel">1Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,10 15,6 22,7 30,2"/></svg><span class="tpct pos">+126.26%</span></div>
+            <div class="tcell"><span class="tlabel">5Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,9 15,6 22,4 30,1"/></svg><span class="tpct pos">+18.46%</span></div>
+          </div></td></tr>
+
+        <tr class="lrow"><td class="l sy">MPC</td><td class="l"><span class="sig hold">HOLD</span></td>
+          <td class="r mut">313.42</td><td class="r pos">+0.78</td><td class="r"><span class="tick-up">316.34</span></td>
+          <td class="l"><svg class="spark" width="60" height="16"><polyline class="sp-up" points="0,9 10,8 20,10 30,9 40,8 50,9 60,8"/></svg></td></tr>
+        <tr class="lsub nb"><td colspan="6" class="l">TK 316.00 · KJ 285.39 · Cld 300.70<span class="cloudchips"><span class="cchip abv">15m▲</span><span class="cchip abv">1h▲</span><span class="cchip abv">1d▲</span></span></td></tr>
+        <tr class="lkpi"><td colspan="6">Vol 80.0K · MCap 92.4B</td></tr>
+        <tr class="ltrend"><td colspan="6">
+          <div class="trends">
+            <div class="tcell"><span class="tlabel">1H</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,9 8,8 15,10 22,6 30,4"/></svg><span class="tpct pos">+0.40%</span></div>
+            <div class="tcell"><span class="tlabel">1D</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,11 15,13 22,8 30,4"/></svg><span class="tpct pos">+1.15%</span></div>
+            <div class="tcell"><span class="tlabel">1W</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,11 8,9 15,8 22,6 30,4"/></svg><span class="tpct pos">+2.11%</span></div>
+            <div class="tcell"><span class="tlabel">1M</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,9 15,7 22,5 30,3"/></svg><span class="tpct pos">+18.82%</span></div>
+            <div class="tcell"><span class="tlabel">1Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,12 8,10 15,8 22,5 30,2"/></svg><span class="tpct pos">+96.64%</span></div>
+            <div class="tcell"><span class="tlabel">5Y</span><svg class="spark" width="30" height="13"><polyline class="sp-up" points="0,13 8,11 15,9 22,5 30,1"/></svg><span class="tpct pos">+434.90%</span></div>
+          </div></td></tr>
+      </tbody>
+    </table></div>
+    <div class="mut" style="font-size:10px;margin-top:6px">Live values from the real paper stack (2026-08-02). KPI line is <b>configurable</b> — a registered-KPI framework (<code>config/kpis.ts</code>), not hardcoded fields; the gear icon's checkbox list is that registry rendered as UI. ▲ above cloud · ● in cloud · ▼ below cloud, per granularity.</div>
+  </div>
+
+  <!-- WATCHLIST — gear icon popover (shipped, #182 follow-up Phase 4/5) -->
+  <div class="eyebrow">Gear icon popover — sort + filter + KPI-select, ONE control replacing a permanent filter-chip row + per-column SortHeader clicks (contrast with the SortHeader/FilterChips proposal below, which Watchlist did NOT end up using)</div>
+  <div class="tile"><div style="padding:11px 13px;display:flex;flex-direction:column;gap:12px;max-width:280px">
+    <div>
+      <div class="k" style="margin-bottom:6px">Sort by</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="sortmenu" style="flex:1">Market cap</span>
+        <span class="sortmenu" style="padding:4px 9px">↑</span>
+      </div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">Filter by signal</div>
+      <div class="filters" style="border:0;padding:0"><span class="f on">WATCH</span><span class="f">HOLD</span><span class="f">EXIT</span></div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">Filter by Blue Flag tier</div>
+      <div class="filters" style="border:0;padding:0"><span class="f">+++</span><span class="f on">++</span><span class="f">+</span><span class="f">=</span><span class="f">−−</span><span class="f">−−−</span><span class="f">?</span></div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">Filter by cloud position (1d)</div>
+      <div class="filters" style="border:0;padding:0"><span class="f on">above ▲</span><span class="f">in ●</span><span class="f">below ▼</span></div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">KPIs shown</div>
+      <div class="mut" style="font-size:10px">☑ Volume · ☑ Market cap · ☑ P/E · ☐ Beta · ☐ EPS · ☐ Dividend · ☐ Today's range · ☐ Prior close · ☐ Bid/Ask size</div>
+    </div>
+    <div class="mut" style="font-size:9px;border-top:1px dashed var(--line);padding-top:7px">Filters AND together (2 active reads "2/17 symbols" in the header). Persisted per tile instance to localStorage (Operator: "setting file, we have a concept for this" — not Postgres) — survives reload, doesn't need the DB. Rows stay mounted while filtered out so a later status/tier/cloud change can bring them back into view.</div>
+  </div></div>
+
+  <!-- ORDERS -->
+  <div class="eyebrow">Orders — status is <b>never hidden</b>: a prominent badge in the frozen zone next to the symbol; a terminal DENIED/REJECT shows WHY, inline (never the engine logs)</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Orders</span><span class="sum"><b>1</b> working · 4 today</span></div>
+    <div class="filters"><span class="f on">ALL</span><span class="f">OPEN</span><span class="f">PART</span><span class="f">FILLED</span><span class="f">REJ</span></div>
+    <div class="ovf"><table class="lt">
+      <thead><tr><th class="l">Symbol</th><th class="l">Status</th><th class="l">Side</th><th>Type</th><th>Price <span class="ar idle">▲▼</span></th><th class="on">Age <span class="ar">▼</span></th></tr></thead>
+      <tbody>
+        <tr class="lrow"><td class="l sy">PENG</td><td class="l"><span class="ost deny">DENIED</span></td><td class="l"><span class="side-b">BUY</span> 127</td>
+          <td class="r">MKT</td><td class="r mut">—</td><td class="r mut">4s</td></tr>
+        <tr class="lsub"><td colspan="6" class="l"><span class="strat">MANUAL</span> · <span style="color:var(--bear)">quantity 127.0 invalid (precision 1 &gt; 0)</span> — fix the size &amp; resubmit</td></tr>
+        <tr class="lrow"><td class="l sy">PENG</td><td class="l"><span class="ost work">WORKING</span></td><td class="l"><span class="side-b">BUY</span> 127</td>
+          <td class="r">MKT</td><td class="r mut">bracket</td><td class="r mut">2s</td></tr>
+        <tr class="lsub"><td colspan="6" class="l"><span class="strat">MANUAL</span> · 0/127 filled · <span style="color:var(--bull)">TP 81.00</span> / <span style="color:var(--bear)">SL 73.20</span></td></tr>
+        <tr class="lrow"><td class="l sy">JNJ</td><td class="l"><span class="ost fill">FILLED</span></td><td class="l"><span class="side-b">BUY</span> 40</td>
+          <td class="r">LMT</td><td class="r">257.00</td><td class="r mut">12m</td></tr>
+        <tr class="lsub"><td colspan="6" class="l"><span class="strat">MANUAL</span> · 40/40 · avg 256.98 · last 257.02</td></tr>
+        <tr class="lrow"><td class="l sy">DLL</td><td class="l"><span class="ost rej">REJECTED</span></td><td class="l"><span class="side-s">SELL</span> 200</td>
+          <td class="r">STP</td><td class="r">24.00</td><td class="r mut">20m</td></tr>
+        <tr class="lsub"><td colspan="6" class="l"><span class="strat">MANUAL</span> · <span style="color:var(--bear)">insufficient buying power</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="mut" style="font-size:10px;margin-top:6px">Status pins next to the symbol — never the far-right column behind a horizontal scroll. Terminal (DENIED/REJECTED/EXPIRED/CANCELED) = bold badge + reason inline; benign (WORKING/FILLED) stays quiet.</div>
+  </div>
+
+  <!-- POSITIONS -->
+  <div class="eyebrow">Positions — same unified row: symbol-first main line + cycle/cost sub-line</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Positions</span><span class="sum"><b>2</b> open · sort <b>|U-P&amp;L|</b></span></div>
+    <div class="filters"><span class="f on">All</span><span class="f">Winners</span><span class="f">Losers</span><span class="f">MANUAL</span><span class="f">MOMENTUM</span><span class="sortmenu" style="margin-left:auto">↕ |U-P&amp;L| ▼</span></div>
+    <div class="ovf"><table class="lt">
+      <thead><tr><th class="l">Symbol</th><th class="l">Sig</th><th>Qty <span class="ar idle">▲▼</span></th><th>Last <span class="ar idle">▲▼</span></th><th class="on">U-P&amp;L <span class="ar">▼</span></th></tr></thead>
+      <tbody>
+        <tr class="lrow"><td class="l sy">MPC</td><td class="l"><span class="sig hold">HOLD</span></td>
+          <td class="r">15</td><td class="r">283.69</td><td class="r pnl-neg neg">−21.15</td></tr>
+        <tr class="lsub"><td colspan="5" class="l"><span class="strat">MOMENTUM</span> · <span style="color:var(--bull)">AUTO (2)</span> · cycle A 285.1 <span style="color:var(--info)">ENG</span> · avg 285.10 · day −0.49</td></tr>
+        <tr class="lrow"><td class="l sy">JNJ</td><td class="l"><span class="sig hold">HOLD</span></td>
+          <td class="r">40</td><td class="r">257.02</td><td class="r pnl-pos pos">+1.60</td></tr>
+        <tr class="lsub"><td colspan="5" class="l"><span class="strat">MANUAL</span> · cycle A 256.9 <span style="color:var(--bull)">DEP</span> · avg 256.98 · day +0.02</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- FROZEN COLUMN DEMO -->
+  <div class="eyebrow">Frozen identity column — <b>symbol pins</b> while the rest scrolls → (scroll this list sideways)</div>
+  <div class="tile"><div class="ovf"><table class="lt stickcol">
+    <thead><tr><th class="l">Symbol</th><th class="l">Sig</th><th>Qty</th><th>Avg</th><th>Last</th><th>Day</th><th>U-P&amp;L</th><th>Mkt Val</th><th class="l">Cycle</th></tr></thead>
+    <tbody>
+      <tr class="lrow"><td class="l sy">MPC</td><td class="l"><span class="sig hold">HOLD</span></td><td class="r">15</td><td class="r mut">285.10</td><td class="r">283.69</td><td class="r neg">−0.49</td><td class="r neg">−21.15</td><td class="r">4,255</td><td class="l mut">A285.1·ENG</td></tr>
+      <tr class="lrow"><td class="l sy">JNJ</td><td class="l"><span class="sig hold">HOLD</span></td><td class="r">40</td><td class="r mut">256.98</td><td class="r">257.02</td><td class="r pos">+0.02</td><td class="r pos">+1.60</td><td class="r">10,281</td><td class="l mut">A256.9·DEP</td></tr>
+    </tbody>
+  </table></div></div>
+  <div class="mut" style="font-size:10px;margin-top:6px">Only when a list is wider than the screen. <code>position:sticky; left:0</code> on the symbol column. On wide desktop lists, strategy joins the frozen left group; on mobile it rides in the sub-line under the (already-visible) symbol.</div>
+
+  <!-- TABLE CONTROLS — sort + filter primitive -->
+  <div class="eyebrow" style="margin-top:16px">Table controls proposal — per-column <b>SortHeader</b> + always-visible <b>FilterChips</b> · original design, still NOT built · Watchlist shipped a different mechanism instead (gear-icon popover, above) — this stays open for Orders/Positions, where it may still fit</div>
+  <div class="tile"><div style="padding:11px 13px;display:flex;flex-direction:column;gap:13px">
+    <div>
+      <div class="k" style="margin-bottom:6px">SortHeader — tap a column to sort · tap again flips · one active column, arrow shows direction</div>
+      <div style="display:flex;gap:16px;font-size:10px;flex-wrap:wrap;align-items:center">
+        <span class="sh">Symbol <span class="ar idle">▲▼</span></span>
+        <span class="sh on">U-P&amp;L <span class="ar">▼</span></span>
+        <span class="sh">Last <span class="ar idle">▲▼</span></span>
+        <span class="sh">Age <span class="ar idle">▲▼</span></span>
+        <span class="mut" style="font-size:9px">idle = faint ▲▼ · active = bright + ▲/▼</span>
+      </div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">Sort menu — mobile mirror of the <b>same canonical sort state</b> as the header (one source of truth; menu is the mobile entry point, hidden on desktop)</div>
+      <span class="sortmenu">↕ Sort · |U-P&amp;L| ▼</span>
+      <div class="sortdrop">
+        <div>Symbol <span class="dir">A→Z</span></div>
+        <div class="on">|U-P&amp;L| <span class="dir">high → low ▼</span></div>
+        <div>Last <span class="dir">—</span></div>
+        <div>Signal <span class="dir">—</span></div>
+        <div>Day % <span class="dir">—</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:6px">FilterChips — quick predicates · multi-select · active count in the tile header</div>
+      <div class="filters" style="border:0;padding:0"><span class="f">All</span><span class="f">Open</span><span class="f on">Held</span><span class="f">Winners</span><span class="f">Losers</span><span class="f on">MANUAL</span><span class="f">＋ Filter</span></div>
+      <div class="mut" style="font-size:9px;margin-top:4px">Two active → header reads <b>“2 of 7 · Held · MANUAL”</b>. <b>All</b> = reset (clears predicates, can't coexist with them). Chips are text (colour+label), never icon-only; same row shape as the Watchlist/Orders filters.</div>
+    </div>
+    <div class="slide-hint" style="border-top:1px dashed var(--line);padding-top:7px">This is <b>one SortHeader primitive</b> — the demo above and a real <code>thead th</code> + <code>.ar</code> would be the same treatment (only <b>sortable</b> columns carry ▲▼; Trend/spark, Side, Status don't). <b>Impl spec:</b> headers + menu are <code>role=button</code> w/ <code>aria-sort</code> on the active column, <code>aria-expanded/controls</code> on the menu; chips are <code>aria-pressed</code> multi-select; keyboard-operable + visible focus. <b>Not what shipped for Watchlist</b> (#182 follow-up): one sort field at a time didn't need per-column click targets, and a permanent filter-chip row cost more header space than a gear icon did — see the Watchlist gear-icon popover mock above for what actually got built.</div>
+  </div></div>
+
+  <!-- ORDER TICKET -->
+  <div class="eyebrow">Order ticket — strategy-first (the #51 form, in the system)</div>
+  <div class="tkt">
+    <div class="trow"><span class="lbl">Strategy</span>
+      <button class="cb buy">MANUAL</button><button class="cb soon">MOMENTUM ·soon</button><button class="cb soon">ETF_AUTO ·soon</button></div>
+    <div class="trow"><span class="lbl">Side</span>
+      <button class="cb buy">BUY</button><button class="cb">SELL</button><span class="sep"></span>
+      <span class="lbl">Entry</span>
+      <button class="cb on">Now</button><button class="cb">Limit</button><button class="cb">Pullback</button><button class="cb">Breakout</button></div>
+    <div class="trow"><span class="lbl">Stop</span>
+      <button class="cb on">Ichi</button><button class="cb">ATR</button><button class="cb">%</button><button class="cb">Manual</button><span class="sep"></span>
+      <span class="lbl">Risk</span><input value="0.5"><span class="mut" style="font-size:11px">%</span>
+      <span class="size">38 sh · ~$9.8k · risk ~$421</span></div>
+    <div class="trow" style="gap:14px">
+      <label class="lvl"><span>Entry (mkt)</span><span class="mut" style="font-size:12px">~$257.02</span></label>
+      <label class="lvl"><span>Stop · Ichi</span><input value="245.95"></label>
+      <label class="lvl"><span>Target · 2R</span><input value="279.16"></label></div>
+    <div class="trow" style="border-top:1px solid var(--line);padding-top:9px"><span class="lbl">Arm on fill</span>
+      <button class="cb on">PEAK</button><button class="cb on">Stop-Reenter</button><button class="cb on">Breakeven</button><button class="cb on">Time-exit</button><button class="cb">Pyramid</button>
+      <span class="mut" style="font-size:10px;margin-left:auto">all on → deactivate any</span></div>
+    <div class="slide buy" style="margin-top:2px"><div class="sfill"></div><div class="slbl">Slide to BUY 38 JNJ · bracket · ~$9.8k</div><div class="sthumb">››</div></div>
+    <div class="slide-hint">Submit is the commit → it <b>slides</b>. Buttons that only <b>open a ticket</b> (BUY/SELL on a chart, Add, Modify) stay taps.</div>
+  </div>
+
+  <!-- CHART -->
+  <div class="eyebrow">Chart — Ichimoku candles + cloud + order lines, colours are tokens (flip with day/night)</div>
+  <div class="chart">
+    <div class="ctrl">
+      <span class="c2">1D</span><span class="c2 on">1W</span><span class="c2">1M</span><span class="c2">3M</span><span class="c2">1Y</span><span class="c2">5Y</span>
+      <span class="sepc">│</span>
+      <span class="c2">1m</span><span class="c2">5m</span><span class="c2">15m</span><span class="c2 on">30m</span><span class="c2">1h</span><span class="c2">1d</span>
+    </div>
+    <div class="lg">
+      <span class="cx-tk">— Tenkan <b>256.4</b></span><span class="cx-kj">— Kijun <b>255.1</b></span>
+      <span class="cx-sa">▧ Span A</span><span class="cx-sb">▧ Span B</span><span class="cx-ck">·· Chikou</span><span class="cx-ma">— 200MA</span>
+    </div>
+    <svg viewBox="0 0 340 175" preserveAspectRatio="none" aria-label="Ichimoku chart">
+      <!-- gridlines + axis -->
+      <line class="c-grid" x1="30" y1="48" x2="332" y2="48"/><text class="c-axis clbl" x="2" y="50">258.00</text>
+      <line class="c-grid" x1="30" y1="72" x2="332" y2="72"/><text class="c-axis clbl" x="2" y="74">256.00</text>
+      <line class="c-grid" x1="30" y1="96" x2="332" y2="96"/><text class="c-axis clbl" x="2" y="98">254.00</text>
+      <!-- cloud (kumo) -->
+      <polygon class="cloud-bull" points="30,102 120,99 210,90 332,84 332,93 210,99 120,106 30,108"/>
+      <!-- 200MA + tenkan + kijun -->
+      <polyline class="c-ma" points="30,118 120,112 210,104 332,96"/>
+      <polyline class="c-kj" points="30,106 120,102 210,92 332,82"/>
+      <polyline class="c-tk" points="30,104 88,98 136,88 184,80 232,70 304,60"/>
+      <!-- order lines -->
+      <line class="c-tp" x1="30" y1="42" x2="332" y2="42"/><text class="c-axis clbl" x="292" y="40" style="fill:var(--bull)">TP 258.50</text>
+      <line class="c-sl" x1="30" y1="110" x2="332" y2="110"/><text class="c-axis clbl" x="292" y="117" style="fill:var(--bear)">SL 252.80</text>
+      <!-- candles: wick line + body rect -->
+      <g stroke-width="1">
+        <line class="c-up" x1="40" y1="96" x2="40" y2="108"/><rect class="c-up" x="36" y="98.4" width="8" height="7.2"/>
+        <line class="c-dn" x1="64" y1="96" x2="64" y2="104.4"/><rect class="c-dn" x="60" y="98.4" width="8" height="3.6"/>
+        <line class="c-up" x1="88" y1="88.8" x2="88" y2="103.2"/><rect class="c-up" x="84" y="91.2" width="8" height="10.8"/>
+        <line class="c-dn" x1="112" y1="87.6" x2="112" y2="97.2"/><rect class="c-dn" x="108" y="91.2" width="8" height="3.6"/>
+        <line class="c-up" x1="136" y1="79.2" x2="136" y2="96"/><rect class="c-up" x="132" y="81.6" width="8" height="13.2"/>
+        <line class="c-dn" x1="160" y1="78" x2="160" y2="87.6"/><rect class="c-dn" x="156" y="81.6" width="8" height="2.4"/>
+        <line class="c-up" x1="184" y1="72" x2="184" y2="85.2"/><rect class="c-up" x="180" y="74.4" width="8" height="9.6"/>
+        <line class="c-up" x1="208" y1="66" x2="208" y2="76.8"/><rect class="c-up" x="204" y="68.4" width="8" height="6"/>
+        <line class="c-dn" x1="232" y1="64.8" x2="232" y2="74.4"/><rect class="c-dn" x="228" y="68.4" width="8" height="3.6"/>
+        <line class="c-up" x1="256" y1="60" x2="256" y2="73.2"/><rect class="c-up" x="252" y="62.4" width="8" height="9.6"/>
+        <line class="c-up" x1="280" y1="56.4" x2="280" y2="64.8"/><rect class="c-up" x="276" y="58.8" width="8" height="3.6"/>
+        <line class="c-dn" x1="304" y1="55.2" x2="304" y2="62.4"/><rect class="c-dn" x="300" y="58.8" width="8" height="1.2"/>
+      </g>
+      <!-- fill marker (buy) -->
+      <polygon class="c-fill" points="136,100 132,107 140,107"/><text class="c-axis clbl" x="118" y="115" style="fill:var(--bull)">BUY 38</text>
+      <!-- volume -->
+      <g class="c-vol">
+        <rect x="37" y="150" width="6" height="18"/><rect x="61" y="158" width="6" height="10"/><rect x="85" y="142" width="6" height="26"/><rect x="109" y="156" width="6" height="12"/>
+        <rect x="133" y="138" width="6" height="30"/><rect x="157" y="154" width="6" height="14"/><rect x="181" y="146" width="6" height="22"/><rect x="205" y="148" width="6" height="20"/>
+        <rect x="229" y="156" width="6" height="12"/><rect x="253" y="140" width="6" height="28"/><rect x="277" y="152" width="6" height="16"/><rect x="301" y="158" width="6" height="10"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- CHART VARIANTS -->
+  <div class="eyebrow">Chart variants — same tokens, different form for different jobs</div>
+  <div class="cvar">
+    <div class="v"><div class="vt2">Candles · detail</div><svg viewBox="0 0 100 34"><g stroke-width="1.5">
+      <line class="c-up" x1="14" y1="8" x2="14" y2="26"/><rect class="c-up" x="10" y="14" width="8" height="8"/>
+      <line class="c-dn" x1="34" y1="10" x2="34" y2="28"/><rect class="c-dn" x="30" y="16" width="8" height="7"/>
+      <line class="c-up" x1="54" y1="6" x2="54" y2="22"/><rect class="c-up" x="50" y="10" width="8" height="9"/>
+      <line class="c-up" x1="74" y1="4" x2="74" y2="18"/><rect class="c-up" x="70" y="7" width="8" height="7"/></g></svg></div>
+    <div class="v"><div class="vt2">Line · tile</div><svg viewBox="0 0 100 34"><polyline class="c-tk" points="4,26 24,20 44,22 64,10 84,12 96,5"/></svg></div>
+    <div class="v"><div class="vt2">Area · mini</div><svg viewBox="0 0 100 34"><polygon class="cloud-bull" points="4,26 24,20 44,22 64,10 84,12 96,5 96,34 4,34"/><polyline class="c-tk" points="4,26 24,20 44,22 64,10 84,12 96,5"/></svg></div>
+    <div class="v"><div class="vt2">Sparkline · watch row</div><svg viewBox="0 0 100 34"><polyline class="sp-up" points="4,24 20,22 36,25 52,16 68,18 84,10 96,8"/></svg></div>
+    <div class="v"><div class="vt2">Depth profile</div><svg viewBox="0 0 100 34">
+      <rect class="c-up" x="0" y="4" width="40" height="4" opacity=".5"/><rect class="c-up" x="0" y="12" width="62" height="4" opacity=".5"/>
+      <rect class="c-dn" x="0" y="20" width="30" height="4" opacity=".5"/><rect class="c-dn" x="0" y="28" width="50" height="4" opacity=".5"/></svg></div>
+    <div class="v"><div class="vt2">Loading / no-feed</div><div class="skel" style="width:90%;margin-top:2px"></div><div class="skel" style="width:70%"></div><div class="empty" style="padding:2px 0 0">market closed</div></div>
+  </div>
+
+  <!-- INSTRUMENT DETAIL -->
+  <div class="eyebrow">Instrument detail — header · bid/ask · depth · actions</div>
+  <div class="det">
+    <div class="dh">
+      <div><span class="nm">JNJ</span><span class="ex">NYSE · Johnson &amp; Johnson</span></div>
+      <div class="sess">CLOSED · opens Mon 09:30 ET · <span class="sig hold">HOLD ABV CLOUD</span></div>
+      <div class="px"><span class="big">$257.02</span><span class="pos">+1.03 · +0.40%</span></div>
+    </div>
+    <div class="ba">
+      <div class="c"><div class="k">Bid</div><span class="pos">256.98</span> <span class="mut">× 400</span></div>
+      <div class="c"><div class="k">Ask</div><span class="neg">257.06</span> <span class="mut">× 250 · spr 0.08</span></div>
+    </div>
+    <div class="hlv">
+      <div class="c"><div class="k">Open</div><div>256.10</div></div>
+      <div class="c"><div class="k">Hi / Lo</div><div>257.9 / 255.6</div></div>
+      <div class="c"><div class="k">Vol</div><div>6.4M</div></div>
+    </div>
+    <div style="padding:8px 14px 11px">
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t3);margin-bottom:4px"><span class="pos">BID 62%</span><span>L1 · NBBO top-of-book</span><span class="neg">38% ASK</span></div>
+      <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surf2)">
+        <div style="width:62%;background:color-mix(in srgb,var(--bull) 55%,transparent)"></div>
+        <div style="width:38%;background:color-mix(in srgb,var(--bear) 55%,transparent)"></div>
+      </div>
+    </div>
+  </div>
+  <div class="acts"><button class="b">BUY</button><button class="s">SELL</button></div>
+
+  <!-- DETAIL SURFACES PER (TAB × STRATEGY) -->
+  <div class="eyebrow" style="margin-top:16px">Detail surfaces — one per <b>(tab × strategy)</b>, NOT one generic symbol screen · a list row taps into the detail for ITS tab · <code>DetailRegistry(tab, strategy)</code></div>
+  <div class="dgrid">
+    <!-- WATCH detail -->
+    <div class="det">
+      <div class="dh2"><span class="dtab">WATCH</span><span class="strat">MANUAL</span></div>
+      <div class="dnm">JNJ <span class="ex">Johnson &amp; Johnson</span></div>
+      <div class="drow"><span class="k">Signal</span><span class="sig hold">HOLD ABV CLOUD</span></div>
+      <div class="drow"><span class="k">Last</span><span>$257.02 <span class="pos">+0.40%</span></span></div>
+      <div class="dmini">chart · Ichimoku · cloud</div>
+      <div class="acts"><button class="b">BUY</button><button class="s">SELL</button></div>
+    </div>
+    <!-- PORTFOLIO detail · MANUAL — a held position: manage/exit, NOT buy/sell like Watch -->
+    <div class="det">
+      <div class="dh2"><span class="dtab">PORTFOLIO</span><span class="strat">MANUAL</span></div>
+      <div class="dnm">JNJ <span class="ex">40 sh · avg 256.98</span></div>
+      <div class="drow"><span class="k">U-P&amp;L</span><span class="pos">+$1.60 <span class="mut" style="font-size:9px">day +0.02</span></span></div>
+      <div class="drow"><span class="k">Cycle</span><span><span class="sig hold">DEPLOYED</span> A · since 256.9</span></div>
+      <div class="drow"><span class="k">Protect</span><span><span style="color:var(--bull)">TP 279.16</span> / <span style="color:var(--bear)">SL 245.95</span></span></div>
+      <div class="dmini">chart · fills · cycle drill-down</div>
+      <div style="padding:2px 12px 11px;display:flex;flex-direction:column;gap:7px">
+        <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to SELL 40 JNJ @ MKT · flatten · realize +$1.60</div><div class="sthumb">››</div></div>
+        <div class="acts" style="grid-template-columns:1fr"><button class="cb" style="padding:9px;text-align:center">⚙ Manage position · add / trim / stop / target →</button></div>
+      </div>
+    </div>
+    <!-- POSITION detail (MOMENTUM adds the automation panel) -->
+    <div class="det">
+      <div class="dh2"><span class="dtab">POSITION</span><span class="strat">MOMENTUM</span></div>
+      <div class="dnm">MPC <span class="ex">15 sh · avg 285.10</span></div>
+      <div class="drow"><span class="k">U-P&amp;L</span><span class="neg">−21.15 <span class="mut" style="font-size:9px">day −0.49</span></span></div>
+      <div class="drow"><span class="k">Cycle</span><span><span class="sig hold">ENGAGED</span> A · since 285.1</span></div>
+      <div class="drow"><span class="k">Protect</span><span><span style="color:var(--bull)">TP 300.0</span> / <span style="color:var(--bear)">SL 278.0</span></span></div>
+      <div class="apanel" style="border-radius:0;border-top:1px solid var(--line);margin-top:4px">
+        <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">PEAK sell-spike</span><span class="stb wb">watching</span></div>
+        <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">Move to breakeven</span><span class="stb ab">armed</span></div>
+        <div class="arow aoff"><span class="sw2"><span class="kn"></span></span><span class="an2">Pyramid add</span><span class="stb ob">off</span></div>
+      </div>
+      <div style="padding:6px 12px 10px;display:flex;flex-direction:column;gap:7px">
+        <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to SELL 15 MPC @ MKT · flatten · realize −$21.15</div><div class="sthumb">››</div></div>
+        <div class="acts" style="grid-template-columns:1fr"><button class="cb" style="padding:9px;text-align:center">⚙ Manage position · add / trim / stop / target →</button></div>
+      </div>
+    </div>
+    <!-- ORDER detail (the deny reason lives HERE) -->
+    <div class="det">
+      <div class="dh2"><span class="dtab">ORDER</span><span class="strat">MANUAL</span></div>
+      <div class="dnm">PENG <span class="ex">BUY 127 · MKT</span></div>
+      <div class="dstat"><span class="ost deny">DENIED</span><span style="color:var(--bear);font-size:11px">quantity 127.0 invalid (precision 1 &gt; 0)</span></div>
+      <div class="dtl">
+        <div class="tlrow done"><span>Submitted</span><span class="mut">20:22:41</span></div>
+        <div class="tlrow deny"><span>Denied · RiskEngine</span><span class="mut">20:22:41</span></div>
+      </div>
+      <div class="drow"><span class="k">Fills</span><span class="mut">0 / 127 · —</span></div>
+      <div class="drow"><span class="k">Bracket</span><span><span style="color:var(--bull)">TP 81.00</span> / <span style="color:var(--bear)">SL 73.20</span> · OCO</span></div>
+      <!-- DENIED is terminal → nothing live to cancel; offer resubmit (tap→ticket), not a cancel slide -->
+      <div class="acts" style="padding:2px 12px 11px"><button class="cb" style="padding:8px;text-align:center">Modify &amp; resubmit</button><button class="cb" style="padding:8px;text-align:center">Dismiss</button></div>
+    </div>
+  </div>
+  <div class="mut" style="font-size:10px;margin-top:6px">Same registry pattern as tiles/actions — <code>DetailRegistry</code> keyed by <code>(tab, strategy_id)</code>. WATCH ≠ PORTFOLIO ≠ ORDER, each re-composes by MANUAL / MOMENTUM / ETF_AUTO → <b>detail = f(tab, strategy)</b>. <b>Action sets differ by surface:</b> Watch/Search → BUY/SELL + ＋Watch (open a ticket, tap); <b>Portfolio → Flatten (quick slide) + Manage (tap→ticket)</b>; MOMENTUM adds the manager panel; Order → cancel (slide) / modify (tap). A DENIED reason belongs on the order detail, never the engine logs.</div>
+
+  <!-- MANAGE TICKET — order.manage -->
+  <div class="eyebrow" style="margin-top:16px">Manage position — <code>order.manage</code> · tap a held position → here · add / trim / stop / target / flatten, resolving to <b>one net protection set</b> (NETTING: one position → one stop + optional OCO target)</div>
+  <div class="tkt">
+    <div class="trow"><span class="lbl">Manage</span><span class="sy" style="font-weight:700">JNJ</span><span class="strat">MANUAL</span><span class="mut" style="font-size:11px">40 sh · avg 256.98 · <span class="pos">+$1.60</span> · net stop 245.95 · risk $441 (1.0R)</span></div>
+    <div class="trow"><span class="lbl">Action</span>
+      <button class="cb on">Add · scale-in</button><button class="cb">Trim · scale-out</button><button class="cb">Stop</button><button class="cb">Target</button><button class="cb">Flatten</button></div>
+    <div class="trow" style="gap:14px">
+      <label class="lvl"><span>Add qty</span><input value="20"></label>
+      <label class="lvl"><span>Limit</span><input value="259.00"></label>
+      <span class="size">rung 2 · net → 60 sh</span></div>
+    <div class="netimp">
+      <div class="c"><div class="k">New avg</div><div class="v">257.65</div></div>
+      <div class="c"><div class="k">Net qty</div><div class="v">60</div></div>
+      <div class="c"><div class="k">Buying power</div><div class="v">6% → 8%</div></div>
+    </div>
+    <div class="mut" style="font-size:9px;margin-top:1px">Adding moves the net stop → <b>pick how risk realigns, each add</b> (raise = default; keep-price = risk-increasing override):</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="choice on"><span class="rd"></span><span><b>Raise net stop → 250.30</b> · risk held flat <span class="pos">$441</span> · 1.0R</span></div>
+      <div class="choice"><span class="rd"></span><span>Keep net stop 245.95 · risk grows to <span class="neg">$702</span> · 1.6R <span class="warnx">⚠ over 0.5% cap</span></span></div>
+    </div>
+    <div class="slide buy" style="margin-top:2px"><div class="sfill"></div><div class="slbl">BUY +20 JNJ LMT 259.00 · net 60 · replace stop → 250.30 GTC</div><div class="sthumb">››</div></div>
+    <div class="mut" style="font-size:9px;margin-top:3px">Commit is a <b>two-phase saga</b>, not one atomic order — the card shows the real broker state, never the intended one:</div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div class="sagast">① fill · <b>ADD 12 / 20</b> filled @ 259 · <span class="mut">stop realign pending</span></div>
+      <div class="sagast ok">② protected · <b>net 60 · one stop @ 250.30</b> · aligned ✓</div>
+      <div class="sagast bad">⚠ stop replace <b>REJECTED</b> · 20 sh uncovered · old stop re-armed for 40 · <b>[Repair — protect now]</b> · algos killed</div>
+    </div>
+    <div class="slide-hint"><b>Trim/scale-out</b> shrinks the net stop qty to the remainder (keep price = default · option → breakeven; <i>not</i> the add's risk-grow choice) + realizes P&L. <b>Stop</b> = trail/BE/ATR/manual on the one resting order (shows broker order-id + status). <b>Target</b> = the OCO leg of the protection set. <b>Flatten</b> = the card's quick slide. Engine drives cancel-replace <b>fill-driven</b>; a reject re-arms the old stop or forces Repair — protection is never assumed, always reconciled to the broker.</div>
+  </div>
+
+  <!-- VARIATIONS -->
+  <div class="eyebrow">Variations — states every primitive must cover</div>
+  <div class="vars">
+    <div class="vcard"><div class="vt">Signal</div><span class="sig hold">HOLD</span> · <span class="sig exit">EXIT</span> · <span class="sig watchs">WATCH</span></div>
+    <div class="vcard"><div class="vt">Order status</div><div style="font-size:10px;line-height:1.9">
+      <span class="g-work">◐</span> working<br><span class="g-part">◐</span> partial · <span class="g-fill">●</span> filled · <span class="g-rej">×</span> rejected</div></div>
+    <div class="vcard"><div class="vt">MetricCell</div><span class="pos">+1.60</span> · <span class="neg">−21.15</span> · <span class="mut">—</span></div>
+    <div class="vcard"><div class="vt">Tick flash</div><span class="tick-up">257.02</span> <span class="tick-dn">25.04</span></div>
+    <div class="vcard"><div class="vt">Empty</div><div class="empty">No working orders</div></div>
+    <div class="vcard"><div class="vt">Loading</div><div class="skel" style="width:85%"></div><div class="skel" style="width:60%"></div><div class="skel" style="width:72%"></div></div>
+    <div class="vcard"><div class="vt">Connection · #26</div><span style="color:var(--bear);font-size:10px">● feed lost — retry 3s</span><div class="empty" style="padding:4px 0 0;text-align:left">never a silent blank</div></div>
+    <div class="vcard"><div class="vt">Stale · #28</div><span class="mut" style="font-size:12px">257.02</span> <span style="color:var(--watch);font-size:9px;font-weight:600">STALE 4m</span></div>
+    <div class="vcard"><div class="vt">Quarantine · #79</div><span class="sig watchs">EXTERNAL</span> <span class="mut" style="font-size:10px">not attributed</span></div>
+  </div>
+
+  <!-- SEMI-AUTO -->
+  <div class="eyebrow">Semi-automated = MOMENTUM — YOU pick the names + entry; activate/deactivate automatic actions per position (#55)</div>
+  <div class="mut" style="font-size:10px;margin-bottom:8px">Semi = human selects the stock + entry (discretionary). <b>Arm the position → all automatic actions activate</b>; then toggle each ON/OFF (on = it runs automatically). No approve/skip — just on/off. Actions: PEAK sell-the-spike · stop-and-reenter · move-to-breakeven · time-exit · pyramid-add.</div>
+  <div class="eyebrow" style="margin-top:14px">Per-position automation panel — one toggle per action · Auto/Confirm only when ON · state per action</div>
+  <div class="tile apanel">
+    <div class="ahd"><span class="sy" style="font-weight:700">MPC</span> 15 sh · <span class="strat">MOMENTUM</span> · <span class="armed on">● ARMED</span><button class="killbtn" style="margin-left:auto;padding:5px 9px;font-size:9px">Disarm</button></div>
+    <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">PEAK sell-spike</span><span class="ap">trail 0.4·ATR · peak 286.40</span><span class="stb wb">watching</span></div>
+    <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">Stop &amp; reenter</span><span class="ap">reclaim-same · floor 282</span><span class="stb ab">armed</span></div>
+    <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">Move to breakeven</span><span class="ap">at +1R</span><span class="stb ab">armed</span></div>
+    <div class="arow"><span class="sw2 swon"><span class="kn"></span></span><span class="an2">Time exit</span><span class="ap">15:55 ET</span><span class="stb ab">armed</span></div>
+    <div class="arow aoff"><span class="sw2"><span class="kn"></span></span><span class="an2">Pyramid add</span><span class="ap">+0.75R · max 3 rungs</span><span class="stb ob">off — deactivated</span></div>
+  </div>
+  <div class="mut" style="font-size:10px;margin-top:6px"><b>Arm → all actions on.</b> Toggle any OFF to deactivate (Pyramid off here). On = it runs automatically, no approve step. Disarm = all off. State badge per action; params edit on tap. Blotter shows <b>AUTO (4)</b> per name.</div>
+
+  <div class="eyebrow" style="margin-top:16px">Automation event log — what fired (audit, not approval)</div>
+  <div class="tile"><div style="padding:4px 13px 8px">
+    <div class="jrow"><span class="mut" style="font-size:10px">14:22 · PEAK trail moved 284.60 → 284.10 (0.4·ATR) · MPC</span></div>
+    <div class="jrow"><span class="mut" style="font-size:10px">13:05 · Stop &amp; reenter re-armed at 282.00 · MPC</span></div>
+    <div class="jrow"><span class="mut" style="font-size:10px">11:40 · Move-to-breakeven set stop 285.10 · MPC</span></div>
+  </div></div>
+
+  <!-- FULL SCOPE -->
+  <div class="eyebrow">Full scope — every surface this system must cover (from the tickets)</div>
+  <div class="legend" style="grid-template-columns:1fr">
+    <div><b>Tiles</b> — Watchlist · Orders blotter <code>#33</code> · Managed-Portfolio <code>#77</code> · Account header <code>#41</code> · Symbol search <code>#25</code> · Scanner <code>#45</code> · BCT-copy source <code>#54</code> · External-activity quarantine <code>#79</code> · Manager panel <code>#55</code> · Order ticket <code>#51/#67</code></div>
+    <div><b>Screens</b> — Instrument detail, context-aware by (tab, strategy) <code>#27/#70/#71</code> · TradingView deep-link <code>#22</code> · the board/tab framework <code>#7</code></div>
+    <div><b>Home / analytics</b> (from predecessor-repo) — P&amp;L + portfolio risk (max-loss · secured · deployed · sector-concentration · heat-by-strategy · edge) · overnight-stress / VaR-analog <code>#12</code> · journal / activity log · earnings calendar</div>
+    <div><b>States — never silent</b> — connection/health <code>#26</code> · stale/frozen <code>#28</code> · empty · loading · quarantined <code>#79</code></div>
+    <div><b>Semi-auto</b> — leash AUTO/CONFIRM/ALERT + proposal→approve/skip + manager-state <code>#55 · #37/#38/#46/#47</code></div>
+    <div><b>Cross-strategy</b> — portfolio heat + correlation/sector caps <code>#12/#80</code> · <b>Mobile</b> — responsive no-clip <code>#60</code> · swipe-delete <code>#64</code></div>
+    <div style="color:var(--t3)"><b style="color:var(--t3)">Deferred</b> — Scanner / Hunt <code>#45</code> · AI briefs (Market/Portfolio/Radar) · journal + earnings calendar (revisit after the core lands)</div>
+  </div>
+
+  <!-- STRATEGY-ADAPTIVE COMPOSITION -->
+  <div class="eyebrow">Flexible = STRATEGY-ADAPTIVE — pick a strategy, the whole cockpit reshapes (#51 generalized · #70/#71)</div>
+  <div class="tabs" style="margin-top:0"><span class="t on">MANUAL</span><span class="t">MOMENTUM</span><span class="t">ETF_AUTO</span></div>
+  <div class="ovf"><table class="lt" style="margin-top:8px">
+    <thead><tr><th class="l"></th><th class="l">MANUAL</th><th class="l">MOMENTUM</th><th class="l">ETF_AUTO</th></tr></thead>
+    <tbody>
+      <tr class="lrow"><td class="l" style="font-size:9px;color:var(--t3)">TABS</td><td class="l">Watch · Orders · Pos</td><td class="l">Candidates · Managers</td><td class="l">Universe · Rotation</td></tr>
+      <tr class="lrow"><td class="l" style="font-size:9px;color:var(--t3)">LISTS</td><td class="l">discretionary</td><td class="l">momentum + mgr-state</td><td class="l">ETF sleeves</td></tr>
+      <tr class="lrow"><td class="l" style="font-size:9px;color:var(--t3)">ORDER</td><td class="l">entry/stop ticket</td><td class="l">pick algo / manager</td><td class="l">rotation action</td></tr>
+      <tr class="lrow"><td class="l" style="font-size:9px;color:var(--t3)">DETAIL</td><td class="l">chart + signal + ticket</td><td class="l">manager + readiness</td><td class="l">sector exposure</td></tr>
+    </tbody>
+  </table></div>
+  <div class="mut" style="font-size:10px;margin-top:6px">Strategy is the top-level context: selecting it re-composes the <b>tabs</b>, the <b>list tiles</b>, the <b>order screen</b> and the <b>detail surface</b> — all from config keyed by (tab, strategy) (#70/#71). This is the core of the tile framework, not a mobile concern.</div>
+
+  <div class="mut" style="font-size:10px;margin-top:8px">Each tab = one surface (Home · Watch · Orders · Positions · Settings). Switching strategy re-composes what those tabs/lists/order/detail show — same tokens/primitives throughout.</div>
+
+  <!-- REGISTRY PROOF — same slot, swapped impl (shown, not told) -->
+  <div class="eyebrow" style="margin-top:16px">Registry proof — <b>same slot, swapped impl by config</b> · ONE slot re-renders per strategy, not 3 screens (#7/#50/#70)</div>
+  <div class="tabs" style="margin-top:0"><span class="t on">MANUAL</span><span class="t">MOMENTUM</span><span class="t">ETF_AUTO</span></div>
+  <div class="mut" style="font-size:10px;margin:6px 0 10px">Switch the strategy above → the slots below re-render. In each slot the <b>tinted header + action bands are the fixed frame</b> (identity, never moves); the <b>middle body is what the registry swaps</b> (impl). Same shell repeated = one slot.</div>
+
+  <div class="slotgrp">
+    <div class="slot-hd"><span class="sname">ORDER</span><span class="smech">same slot — swapped by config</span></div>
+    <div class="slot-zone">header + footer = <b>fixed frame</b> · middle = <b>swap zone</b> (config picks the impl)</div>
+    <div class="slotrow">
+      <div class="slotcard">
+        <div class="vhd"><span class="vname">vanilla</span><span class="vkey">order.vanilla</span></div>
+        <div class="vbody"><div><span class="side-b">BUY</span> / <span class="side-s">SELL</span> · Now · Limit</div><div>qty · price · TIF</div><div class="mut">discretionary — no managers</div></div>
+        <div class="vfoot"><div class="mini-slide">Slide · BUY 38 JNJ · MKT</div></div>
+      </div>
+      <div class="slotcard">
+        <div class="vhd"><span class="vname">strategy</span><span class="vkey">order.strategy</span></div>
+        <div class="vbody"><div>Strategy-first · Now/Pullback/Breakout</div><div>Ichi stop · 2R target · risk %</div><span class="mgr" style="align-self:flex-start">arm-on-fill: PEAK·BE·time</span></div>
+        <div class="vfoot"><div class="mini-slide">Slide · BUY 38 JNJ · bracket</div></div>
+      </div>
+      <div class="slotcard">
+        <div class="vhd"><span class="vname">assisted</span><span class="vkey">order.assisted</span></div>
+        <div class="vbody"><div>Intent: Breakout <span class="mgr">AUTO STOP-ENTRY</span></div><div class="mut">reason: above 260.20 · spread tight → resting stop</div><div>trigger 260.30 · stop 256.10</div></div>
+        <div class="vfoot"><div class="mini-slide">Slide · BUY 31 JNJ · stop-entry</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="mut" style="font-size:10px;margin:0 0 12px">Header band (variant + <code>key</code>) and slide-action band sit in the <b>same place</b> in all three — only the middle body differs. Schematic: the footer strip is a preview, not a live control (the real one is the SlideToConfirm above). <code>TileRegistry.get("order", strategy)</code> picks the impl.</div>
+
+  <div class="slotgrp">
+    <div class="slot-hd"><span class="sname">LIST TILE</span><span class="smech">same slot — swapped by config</span></div>
+    <div class="slot-zone">header = <b>fixed frame</b> · rows = <b>swap zone</b> · footer = fixed frame</div>
+    <div class="slotrow">
+      <div class="slotcard">
+        <div class="vhd"><span class="vname">MANUAL</span><span class="vkey">list.manual</span></div>
+        <div class="vbody" style="padding:0">
+          <div class="li-r"><div class="li-m"><span class="sy">JNJ</span><span class="sig hold">HOLD</span><span style="margin-left:auto">257.02</span><span class="pos">+0.41</span></div><div class="li-s">above cloud · TK 260.27</div></div>
+          <div class="li-r"><div class="li-m"><span class="sy">SMH</span><span class="sig watchs">WATCH</span><span style="margin-left:auto">611.46</span><span class="mut">0.00</span></div><div class="li-s">in cloud · TK 613.27</div></div>
+        </div>
+        <div class="vfoot inv">tap a row → (tab, strategy) detail</div>
+      </div>
+      <div class="slotcard">
+        <div class="vhd"><span class="vname">MOMENTUM</span><span class="vkey">list.momentum</span></div>
+        <div class="vbody" style="padding:0">
+          <div class="li-r"><div class="li-m"><span class="sy">MPC</span><span class="sig hold">HOLD</span><span class="mgr">AUTO 4</span><span style="margin-left:auto">283.69</span><span class="neg">−0.49</span></div><div class="li-s">mgr: PEAK watching · BE armed · readiness ●●●○</div></div>
+          <div class="li-r"><div class="li-m"><span class="sy">NVDA</span><span class="sig watchs">WATCH</span><span class="mgr">READY</span><span style="margin-left:auto">121.4</span><span class="pos">+1.8</span></div><div class="li-s">breakout setup · trigger 122.0 · readiness ●●●●</div></div>
+        </div>
+        <div class="vfoot inv">tap a row → (tab, strategy) detail</div>
+      </div>
+    </div>
+  </div>
+  <div class="mut" style="font-size:10px;margin:0 0 4px">Same symbol-first row shell + sub-line in both; MOMENTUM's impl <b>adds</b> the manager-state chip (AUTO n · READY) + a readiness sub-line. <code>list.manual</code> vs <code>list.momentum</code> — one slot, swapped by <code>(tab, strategy)</code>.</div>
+
+  <!-- SETTINGS -->
+  <div class="eyebrow" style="margin-top:18px">Settings — schema-driven config (#49)</div>
+  <div class="settings">
+    <div class="sec"><div class="st">Sizing</div>
+      <div class="fld"><span class="fl">Risk mode</span><span class="fv">% equity</span></div>
+      <div class="fld"><span class="fl">Risk per trade</span><span class="fv">0.5 %</span></div>
+      <div class="fld"><span class="fl">Max position</span><span class="fv">10 %</span></div></div>
+    <div class="sec"><div class="st">Risk caps (portfolio-wide)</div>
+      <div class="fld"><span class="fl">Daily loss limit</span><span class="fv">$1,500</span></div>
+      <div class="fld"><span class="fl">Heat cap</span><span class="fv">3 %</span></div>
+      <div class="fld"><span class="fl">Sector concentration</span><span class="fv">50 %</span></div></div>
+    <div class="sec"><div class="st">Prefill defaults</div>
+      <div class="fld"><span class="fl">Stop</span><span class="fv">Ichimoku</span></div>
+      <div class="fld"><span class="fl">Target</span><span class="fv">2R</span></div></div>
+    <div class="sec"><div class="st">Session / market-hours</div>
+      <div class="fld"><span class="fl">New entries — last N min of session</span><span class="fv">blocked</span></div>
+      <div class="fld"><span class="fl">AUTO in pre/post-market</span><span class="fv">off</span></div>
+      <div class="fld"><span class="fl">Day orders at close</span><span class="fv">auto-cancel</span></div>
+      <div class="fld"><span class="fl">Overnight (per strategy)</span><span class="fv">MANUAL swing</span></div></div>
+    <div class="sec"><div class="st">Feeds</div>
+      <div class="fld"><span class="fl">Data · exec</span><span class="fv">Alpaca · paper</span></div></div>
+  </div>
+
+  <!-- SAFETY -->
+  <div class="eyebrow" style="margin-top:18px">Safety — armed/disarmed · kill-switch · <b>slide-to-confirm</b> every commit</div>
+  <div class="tile"><div style="padding:12px 13px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="lbl">Orders</span>
+      <span class="armed on">● ARMED</span><span class="armed off">○ DISARMED</span>
+      <button class="cb" style="margin-left:auto;padding:7px 12px">⏸ Pause new orders</button></div>
+    <div class="slide-hint">Tap <b>pauses new entries instantly</b> (reversible — stops the bleeding fast). Cancelling working orders + flattening every position is <b>destructive</b> → it slides:</div>
+    <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to CANCEL ALL · flatten 2 positions · realize +$1.60</div><div class="sthumb">⏻</div></div>
+  </div></div>
+
+  <!-- SLIDE-TO-CONFIRM — the commit primitive -->
+  <div class="eyebrow" style="margin-top:16px">SlideToConfirm — the commit gesture · every money/destructive action <b>slides</b>, a tap never fires (#safety-ux · #64)</div>
+  <div class="tile"><div style="padding:12px 13px" class="slidegrid">
+    <div>
+      <div class="sl-l">Buy · at rest → drag the thumb right</div>
+      <div class="slide buy"><div class="sfill"></div><div class="slbl">Slide to buy 38 JNJ · ~$9.8k</div><div class="sthumb">››</div></div>
+    </div>
+    <div>
+      <div class="sl-l">Mid-drag · fill tracks the thumb</div>
+      <div class="slide buy" style="--p:.5"><div class="sfill"></div><div class="slbl">keep sliding →</div><div class="sthumb">››</div></div>
+    </div>
+    <div>
+      <div class="sl-l">Past ~88% · release to fire (before → snaps back) · label keeps the full order (colour-never-alone)</div>
+      <div class="slide buy commit" style="--p:.9"><div class="sfill"></div><div class="slbl">Release to BUY 38 JNJ · ~$9.8k</div><div class="sthumb">✓</div></div>
+    </div>
+    <div>
+      <div class="sl-l">Sending · in-flight, thumb locked · idempotent (one client-order-id → no double-submit on retry)</div>
+      <div class="slide buy pending" style="--p:1"><div class="sfill"></div><div class="slbl">Sending…</div><div class="sthumb">…</div></div>
+      <div style="display:flex;gap:7px;margin-top:6px;align-items:center;flex-wrap:wrap;font-size:10px;color:var(--t3)">then resolves →
+        <span class="ost work">WORKING</span><span class="ost fill">FILLED 38 @ 257.02</span><span class="ost rej">REJECTED · buying power</span>
+        <span>— never left on “Sending…”</span></div>
+    </div>
+    <div>
+      <div class="sl-l">Blocked · reason shown in place of the label (never a dead button)</div>
+      <div class="slide buy locked"><div class="sfill"></div><div class="slbl">Disarmed — arm orders to trade</div><div class="sthumb">››</div></div>
+    </div>
+    <div class="slide-hint"><b>Keyboard:</b> Enter/Space <i>arms</i> ("press again to confirm"), a second Enter/Space fires — never a single key (guard <code>event.repeat</code>, require key-up between).
+      <b>Reduced-motion</b> (or no drag surface): thumb becomes <b>press-and-hold ~600 ms</b> with a filling ring. 44 px thumb = touch target.</div>
+    <div class="slide-hint" style="border-top:1px dashed var(--line);padding-top:7px"><b>Impl spec (SlideToConfirm.tsx + engine, not visual):</b> control is a real <code>role=button</code> w/ focus ring + <code>aria-busy</code> live-region announcements (armed / release / rejected) · pointer-capture + horizontal-intent lock · <code>pointercancel</code>/tab-hide → snap back, never left armed · commit only on <code>pointerup</code> past threshold · <b>idempotency key + server-side duplicate-submit block</b> · risk-gate BEFORE the slide shows (market-hours · halt · buying-power · locate · max-size).</div>
+  </div></div>
+
+  <!-- EXIT / FLATTEN -->
+  <div class="eyebrow" style="margin-top:16px">Exit / Flatten — close a position at market · slide-to-confirm (replaces the tap dialog) · realizes P&amp;L, irreversible</div>
+  <div class="tile"><div style="padding:12px 13px" class="slidegrid">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+      <span><span class="sy" style="font-weight:700">JNJ</span> <span class="strat">MANUAL</span> · 40 sh · avg 256.98</span>
+      <span>U-P&amp;L <span class="pos">+$1.60</span></span></div>
+    <div>
+      <div class="sl-l">Flatten — sell 40 @ market, closes cycle A</div>
+      <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to flatten JNJ · realize +$1.60</div><div class="sthumb">››</div></div>
+    </div>
+    <div>
+      <div class="sl-l">Sell (partial / discretionary size)</div>
+      <div class="slide sell"><div class="sfill"></div><div class="slbl">Slide to sell 40 JNJ · MKT</div><div class="sthumb">››</div></div>
+    </div>
+  </div></div>
+
+  <!-- SET STOP (standalone protective) -->
+  <div class="eyebrow" style="margin-top:16px">Set stop — standalone protective stop on an open position · rests at the broker (native), not engine-emulated</div>
+  <div class="tile"><div style="padding:12px 13px" class="slidegrid">
+    <div class="trow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span class="lbl">Stop type</span>
+      <button class="cb on">Ichi 245.95</button><button class="cb">ATR</button><button class="cb">%</button><button class="cb">Manual</button>
+      <label class="lvl" style="margin-left:6px"><span style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Stop px</span><input value="245.95"></label>
+      <span class="size" style="margin-left:auto;font-size:11px;color:var(--t2)">risk ~$421 · 1.7% of pos</span></div>
+    <div>
+      <div class="sl-l">Arm the protective stop</div>
+      <div class="slide neutral"><div class="sfill"></div><div class="slbl">Slide to set stop · SL 245.95 GTC</div><div class="sthumb">››</div></div>
+    </div>
+  </div></div>
+
+  <!-- SWIPE-TO-DELETE (watchlist) -->
+  <div class="eyebrow" style="margin-top:16px">Slide-to-delete — the watchlist row <b>follows your finger</b>; release past the threshold removes it (#64) · one gesture, no confirm tap</div>
+  <div class="tile"><div style="padding:12px 13px;display:flex;flex-direction:column;gap:8px">
+    <div class="swipe"><div class="swact">↩ release to remove</div>
+      <div class="swrow" style="--sw:110px"><span class="sy3">DLLL</span><span class="mut" style="font-size:10px">sliding · past threshold → <b style="color:#fff">release deletes</b></span>
+        <span class="sig exit" style="margin-left:auto">EXIT</span></div></div>
+    <div class="swipe"><div class="swact">↩ release to remove</div>
+      <div class="swrow" style="--sw:40px"><span class="sy3">SMH</span><span class="mut" style="font-size:10px">short slide → snaps back (a tap opens the row)</span>
+        <span class="sig watchs" style="margin-left:auto">WATCH</span></div></div>
+    <div class="slide-hint">The row tracks the finger left; <b>release past ~⅓ across removes</b>, under it snaps back (tint deepens past the commit point). Horizontal-dominant drag only, so vertical scroll + tap-to-open are untouched. Desktop (hover-capable) keeps the ✕ button instead.</div>
+  </div></div>
+
+  <!-- ALERTS -->
+  <div class="eyebrow" style="margin-top:18px">Alerts / notifications — toast + inbox</div>
+  <div class="tile"><div style="padding:11px 13px">
+    <div class="toast ok"><span style="color:var(--bull)">✓ Filled</span> · BUY 40 JNJ @ 256.98 · MANUAL<span class="tt">now</span></div>
+    <div class="toast bad"><span style="color:var(--bear)">✕ Rejected</span> · SELL 200 DLLL · insufficient buying power<span class="tt">2m</span></div>
+    <div class="toast warnt"><span style="color:var(--watch)">⚠ Data stale</span> · SMH no tick 4m · AUTO paused<span class="tt">4m</span></div>
+    <div class="toast warnt"><span style="color:var(--watch)">⚠ Risk</span> · SEMIS sector 54% · over 50% cap<span class="tt">6m</span></div>
+  </div></div>
+
+  <!-- ASSISTED TICKET -->
+  <div class="eyebrow" style="margin-top:18px">Assisted ticket variant — AUTO order-type + reason (#67)</div>
+  <div class="tkt">
+    <div class="trow"><span class="lbl">Intent</span><button class="cb">Take</button><button class="cb on">Breakout</button><button class="cb">Pullback</button>
+      <span class="lbl" style="margin-left:8px">AUTO</span><span class="mgr" style="color:var(--bull);border-color:color-mix(in srgb,var(--bull) 40%,transparent)">STOP-ENTRY</span></div>
+    <div class="mut" style="font-size:10px">Reason · breakout above 260.20 · spread 4bp tight · RTH → resting stop-entry, not market</div>
+    <div class="trow" style="gap:14px">
+      <label class="lvl"><span>Trigger</span><input value="260.30"></label>
+      <label class="lvl"><span>Stop · ATR</span><input value="256.10"></label>
+      <label class="lvl"><span>Size · 0.5%</span><span class="mut" style="font-size:12px">31 sh</span></label></div>
+    <div class="slide buy" style="margin-top:2px"><div class="sfill"></div><div class="slbl">Slide to BUY 31 JNJ · stop-entry · trigger 260.30</div><div class="sthumb">››</div></div>
+  </div>
+
+  <!-- CYCLE DRILLDOWN -->
+  <div class="eyebrow" style="margin-top:18px">Trade-cycle drill-down — anchor → legs → state (#77)</div>
+  <div class="tile"><div style="padding:11px 13px">
+    <div style="display:flex;justify-content:space-between;font-size:12px"><span class="sy" style="font-weight:700">MPC</span><span>net <b>15</b> · anchor 285.10 · <span class="leash confirm">ENGAGED</span></span></div>
+    <div class="cyc">
+      <div class="leg"><span class="lst held">HELD</span><span>+10 @ 285.10 · Jul 11 10:32 · open</span></div>
+      <div class="leg"><span class="lst held">ADD</span><span>+5 @ 284.40 · Jul 11 13:05 · pyramid rung 1</span></div>
+      <div class="leg"><span class="lst" style="color:var(--watch)">ARMED</span><span>PEAK trail 0.4·ATR @ 284.10 · proposing exit</span></div>
+    </div>
+    <div style="font-size:10px;color:var(--t3)">unrealized <span class="neg">−$21.15</span> · realized $0 · P&amp;L from native positions, cycle = engine projection</div>
+  </div></div>
+
+  <!-- CANCEL/MODIFY + CORRELATION + TRADINGVIEW + DETAIL-VARIANTS -->
+  <div class="eyebrow" style="margin-top:18px">Order cancel/modify · cross-strategy correlation · TradingView · detail-variants</div>
+  <div class="tile"><div style="padding:11px 13px;display:flex;flex-direction:column;gap:13px">
+    <div>
+      <div class="k" style="margin-bottom:5px">Working order — inline actions (#33/#34)</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px"><span class="sy" style="font-weight:700">PENG</span> <span class="side-b">BUY</span> 127 STP 76.50 <span class="oact"><button>Modify</button><button class="warn">Cancel</button></span></div>
+    </div>
+    <div>
+      <div class="k" style="margin-bottom:5px">Cross-strategy correlation + capital sleeves (#12/#80)</div>
+      <div class="corr">
+        <div></div><div class="hd">MPC</div><div class="hd">SMH</div><div class="hd">JNJ</div>
+        <div class="hd">MPC</div><div class="cell">1.0</div><div class="cell" style="background:color-mix(in srgb,var(--bear) 18%,transparent)">0.7</div><div class="cell">0.1</div>
+        <div class="hd">SMH</div><div class="cell" style="background:color-mix(in srgb,var(--bear) 18%,transparent)">0.7</div><div class="cell">1.0</div><div class="cell">0.2</div>
+      </div>
+      <div style="margin-top:6px"><span class="cbar"><span class="lb">MANUAL</span><div class="track"><div class="fill" style="width:52%"></div></div><span class="pc">$18k</span></span></div>
+      <div><span class="cbar"><span class="lb">MOMENTUM</span><div class="track"><div class="fill" style="width:28%"></div></div><span class="pc">$10k</span></span></div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:10px;color:var(--t3)">
+      <span><b style="color:var(--t2)">TradingView (#22)</b> · ⇗ Open JNJ in TradingView</span>
+      <span><b style="color:var(--t2)">Detail-variants (#70/#71)</b> · Watch=chart+signal · Portfolio=chart+cycle+manage · strategy-scoped</span>
+    </div>
+  </div></div>
+
+  <!-- JOURNAL -->
+  <div class="eyebrow" style="margin-top:18px">Journal / trade review — setup tag · rating · notes · audit log</div>
+  <div class="tile"><div style="padding:4px 13px 8px">
+    <div class="jrow"><span class="sy" style="font-weight:700">MPC</span><span class="jtag">BREAKOUT</span><span class="mut" style="font-size:10px">closed +$180 · 2.1R · Jul 11</span><span class="jrate pos">A · clean</span></div>
+    <div class="jrow"><span class="sy" style="font-weight:700">DLLL</span><span class="jtag">PULLBACK</span><span class="mut" style="font-size:10px">stopped −$130 · Jul 10</span><span class="jrate" style="color:var(--watch)">C · chased</span></div>
+    <div class="jrow"><span class="mut" style="font-size:10px">audit · disarmed 14:02 · daily-loss 60% alert · Jul 11</span></div>
+  </div></div>
+
+  <!-- RECONCILIATION -->
+  <div class="eyebrow" style="margin-top:18px">Broker reconciliation — local vs broker, resync on mismatch</div>
+  <div class="tile"><div style="padding:11px 13px">
+    <div class="recon">
+      <div class="rh"></div><div class="rh">Local</div><div class="rh">Broker</div><div class="rh"></div>
+      <div>JNJ position</div><div>40</div><div>40</div><div class="pos">✓</div>
+      <div>MPC position</div><div>15</div><div class="diff">12</div><div class="diff">Δ 3</div>
+      <div>Cash</div><div>$13,208</div><div>$13,208</div><div class="pos">✓</div>
+    </div>
+    <div class="acts" style="margin-top:9px;grid-template-columns:auto"><button class="cb" style="padding:7px 12px">Resync from broker</button></div>
+  </div></div>
+
+  <!-- ============================================================================
+       SYSTEMATIC STRATEGY (#185 · pool #186/#191 · lifecycle #187 · portfolio #192
+       · log #188 · this UI #193). A strategy that decides once per session across a
+       whole pool and rebalances with no human in the loop — distinct from the
+       per-symbol semi-auto managers (#55), which stay as they are.
+       ============================================================================ -->
+  <div class="eyebrow" style="margin-top:22px">Systematic strategy — status · our book · the pool it draws from · why it did that (#185)</div>
+
+  <!-- 1 · STATUS. SHADOW must read unmistakably as "deciding, not trading" — the whole
+       point of the state is that it looks alive while being inert. -->
+  <div class="tile">
+    <div class="head"><span class="ttl">MOMENTUM-001</span>
+      <span style="display:flex;align-items:center;gap:10px">
+        <span class="sig hold">SHADOW</span>
+        <span class="sum">decides · <b>submits nothing</b></span></span></div>
+    <div style="padding:11px 13px;display:flex;flex-direction:column;gap:11px">
+      <div class="an">
+        <div><div class="k">Session P&amp;L</div><span class="pos">+$1,284</span></div>
+        <div><div class="k">Held</div>8 / 8</div>
+        <div><div class="k">Deployed</div>74.2%</div>
+        <div><div class="k">Next decision</div>09:35 ET</div>
+        <div><div class="k">Pool</div>66 symbols</div>
+        <div><div class="k">Drift</div><span class="pos">none</span></div>
+      </div>
+      <div class="mut" style="font-size:10px">Last decision 2026-08-04 09:35 · hold 8 · enter 2 · exit 1 — <a href="#" style="color:var(--info)">why?</a></div>
+      <!-- Entering TRADING commits money. Slide, never tap. Labelled with the consequence. -->
+      <div class="slidegrid" style="display:grid;gap:8px">
+        <div class="slide buy"><div class="sfill"></div><div class="slbl">Slide to START TRADING &nbsp;›</div></div>
+        <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to LIQUIDATE 8 positions &nbsp;›</div></div>
+      </div>
+      <div class="acts" style="grid-template-columns:repeat(3,1fr);gap:6px">
+        <button class="cb">Pause</button><button class="cb">Disable</button><button class="cb">Force refresh</button></div>
+    </div>
+  </div>
+
+  <!-- 2 · OUR BOOK. "to exit" is the operator's most useful number: how close a position is
+       to the give-back rule firing. Tint the cell, never the row. ORPHAN is a LABEL, not a
+       colour — held but out of pool is deliberate, not an error. -->
+  <div class="eyebrow">Our book — top 8 of the pool. <b>to exit</b> = points of price before the give-back rule fires (surrendered half its peak profit)</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Portfolio</span><span class="sum"><b>8</b> held · $74.2k deployed</span></div>
+    <div class="ovf"><table class="lt stickcol">
+      <thead><tr><th class="l">Symbol</th><th>Qty</th><th>Last</th><th>Unreal%</th><th>Given back</th><th class="on">To exit</th></tr></thead>
+      <tbody>
+        <tr class="lrow"><td class="l sy">MU</td><td class="r mut">23</td><td class="r">1233.00</td>
+          <td class="r pos">+132.8</td><td class="r mut">12%</td><td class="r pos">+38.4</td></tr>
+        <tr class="lsub"><td colspan="6" class="l">entry 529.74 · peak +132.8% · in target · <span class="strat">via ledger_book</span> · held 56d</td></tr>
+
+        <tr class="lrow"><td class="l sy">FLEX</td><td class="r mut">136</td><td class="r">155.24</td>
+          <td class="r pos">+68.7</td><td class="r">41%</td><td class="r pos">+5.9</td></tr>
+        <tr class="lsub"><td colspan="6" class="l">entry 92.05 · peak +79.1% · in target · <span class="strat">via ledger_book</span> · held 41d</td></tr>
+
+        <tr class="lrow"><td class="l sy">MRVL</td><td class="r mut">48</td><td class="r">269.50</td>
+          <td class="r neg">−15.2</td><td class="r mut">—</td><td class="r mut">—</td></tr>
+        <tr class="lsub"><td colspan="6" class="l">entry 317.63 · never in profit — trail not armed · in target · <span class="strat">via ledger_book</span></td></tr>
+
+        <tr class="lrow"><td class="l sy">GLW</td><td class="r mut">61</td><td class="r">223.88</td>
+          <td class="r pos">+3.1</td><td class="r warn">78%</td><td class="r neg">−1.2</td></tr>
+        <tr class="lsub"><td colspan="6" class="l">entry 217.10 · peak +14.2% · <span class="sig exit">EXITS NEXT DECISION</span> · <span class="strat">via ledger_book</span></td></tr>
+
+        <tr class="lrow"><td class="l sy">ZION</td><td class="r mut">205</td><td class="r">69.05</td>
+          <td class="r neg">−5.3</td><td class="r mut">—</td><td class="r mut">—</td></tr>
+        <tr class="lsub"><td colspan="6" class="l"><span class="sig watch">ORPHAN</span> left the pool 2026-08-02 · still managed by the exit rule, never force-sold · entry 72.93</td></tr>
+      </tbody></table></div>
+  </div>
+
+  <!-- 3 · THE POOL. Provenance chips answer "why is this here" — the thing a flat list
+       can never show. A stale source BLOCKS the session, so it cannot be a quiet grey dot. -->
+  <div class="eyebrow">Symbol pool — <b>union(sources) + whitelist − blacklist</b>, derived on read. Provenance says why each name is present</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Pool</span><span class="sum"><b>66</b> symbols · 3 sources</span></div>
+    <div style="padding:9px 13px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--line)">
+      <div class="fld"><span class="fl">ledger_book <span class="mut">nightly · 63 names</span></span><span class="fv pos">fresh · 04:02</span></div>
+      <div class="fld"><span class="fl">my_watchlist <span class="mut">hourly · 3 names</span></span><span class="fv pos">fresh · 09:31</span></div>
+      <!-- loud on purpose: a stale source blocks the session -->
+      <div class="fld"><span class="fl">scanner <span class="mut">15m · last good 41 names</span></span><span class="fv neg">STALE 26h — blocks decision</span></div>
+    </div>
+    <div class="ovf"><table class="lt stickcol">
+      <thead><tr><th class="l">Symbol</th><th class="l">Provenance</th><th>Held</th><th class="l">In book</th><th class="l">Override</th></tr></thead>
+      <tbody>
+        <tr class="lrow"><td class="l sy">MU</td>
+          <td class="l"><span class="cchip abv">ledger_book</span></td><td class="r mut">56d</td>
+          <td class="l"><span class="sig hold">IN BOOK</span></td><td class="l mut">—</td></tr>
+        <tr class="lsub"><td colspan="5" class="l">opened 2026-06-09 · rank 1 of 66</td></tr>
+
+        <tr class="lrow"><td class="l sy">NVDA</td>
+          <td class="l"><span class="cchip in">whitelist</span></td><td class="r mut">—</td>
+          <td class="l mut">rank 14</td><td class="l"><span class="sig watch">WHITELIST</span></td></tr>
+        <tr class="lsub"><td colspan="5" class="l">pinned by operator · "want it regardless of ledger-provider" · no source contributes it</td></tr>
+
+        <tr class="lrow"><td class="l sy">AMD</td>
+          <td class="l"><span class="cchip abv">ledger_book</span><span class="cchip in">my_watchlist</span></td>
+          <td class="r mut">—</td><td class="l mut">rank 9</td><td class="l mut">—</td></tr>
+        <tr class="lsub"><td colspan="5" class="l">two sources · survives either one dropping it</td></tr>
+
+        <tr class="lrow"><td class="l sy" style="opacity:.5">CIEN</td>
+          <td class="l mut" style="opacity:.5">ledger_book <span class="mut">(overridden)</span></td><td class="r mut">—</td>
+          <td class="l mut">—</td><td class="l"><span class="sig exit">BLACKLIST</span></td></tr>
+        <tr class="lsub"><td colspan="5" class="l">excluded by operator · "spread too wide" · source keeps re-adding it, override holds</td></tr>
+      </tbody></table></div>
+    <div style="padding:10px 13px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)">
+      <div class="acts" style="grid-template-columns:1fr 1fr;gap:6px">
+        <button class="cb">+ Whitelist symbol</button><button class="cb">Clear override</button></div>
+      <!-- blacklisting a HELD name forces liquidation → destructive → slide -->
+      <div class="slide danger"><div class="sfill"></div><div class="slbl">Slide to BLACKLIST &amp; LIQUIDATE ZION &nbsp;›</div></div>
+      <div class="mut" style="font-size:10px">Whitelisting is a tap. Blacklisting a name you hold forces a sale — the only way pool membership ever triggers an exit.</div>
+    </div>
+  </div>
+
+  <!-- 4 · ACTION LOG. Decisions, not just orders — "why did it buy that" answerable months
+       later. risk/error join the always-visible zone per the order-status rule. -->
+  <div class="eyebrow">Action log — every decision carries its full basis: the ranking, the gates, the reason per symbol</div>
+  <div class="tile">
+    <div class="head"><span class="ttl">Action log</span><span class="sum">MOMENTUM-001 · session 2026-08-04</span></div>
+    <div class="seg" style="margin:0 13px"><button class="on">All</button><button>Decision</button><button>Order</button><button>Fill</button><button>Risk</button><button>Error</button></div>
+    <div class="ovf"><table class="lt">
+      <tbody>
+        <tr class="lrow"><td class="l" style="width:52px"><span class="mut">09:35</span></td>
+          <td class="l"><span class="sig hold">DECISION</span></td>
+          <td class="l" colspan="3">SHADOW: hold 8 · enter 2 · exit 1</td></tr>
+        <tr class="lsub"><td colspan="5" class="l">ranked 66 · 4 blocked by gates · entered MU (rank 1), FLEX (rank 3) · exited GLW (gave back 78% of a +14.2% peak) — <a href="#" style="color:var(--info)">full ranking</a></td></tr>
+
+        <tr class="lrow"><td class="l"><span class="mut">09:34</span></td>
+          <td class="l"><span class="sig exit">RISK</span></td>
+          <td class="l" colspan="3">scanner stale 26h — session blocked</td></tr>
+        <tr class="lsub"><td colspan="5" class="l">last good set kept (41 names) · pool not emptied · decision will not run until refreshed</td></tr>
+
+        <tr class="lrow"><td class="l"><span class="mut">04:02</span></td>
+          <td class="l"><span class="sig watch">POOL</span></td>
+          <td class="l" colspan="3">ledger_book: 63 symbols</td></tr>
+        <tr class="lsub"><td colspan="5" class="l">63 held as of 2026-08-02 (lag 1d, expiry 57d) · replaced wholesale</td></tr>
+      </tbody></table></div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div class="eyebrow" style="margin-top:18px">Post-trade analytics — by strategy (edge · risk-adjusted)</div>
+  <div class="tile"><div style="padding:11px 13px">
+    <div class="mut" style="font-size:10px;margin-bottom:7px">MANUAL · last 40</div>
+    <div class="an">
+      <div><div class="k">Win</div><span class="pos">62%</span></div>
+      <div><div class="k">Expectancy</div>+0.4R</div>
+      <div><div class="k">Sharpe</div>1.3</div>
+      <div><div class="k">Max DD</div><span class="neg">−$820</span></div>
+      <div><div class="k">Avg win</div><span class="pos">+$210</span></div>
+      <div><div class="k">Avg loss</div><span class="neg">−$130</span></div>
+      <div><div class="k">Slippage</div>2.1bp</div>
+      <div><div class="k">Hold</div>3.4h</div>
+    </div>
+  </div></div>
+
+  <!-- DETAIL VARIANTS (rendered) -->
+  <div class="eyebrow" style="margin-top:18px">Detail context-variants — same surface, composed per (tab, strategy) (#70/#71)</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+    <div class="vcard"><div class="vt">Watch / MANUAL</div><div class="dl" style="font-size:10px;color:var(--t2);line-height:1.7">Chart + signal<br>Bid/ask<br>Order ticket</div></div>
+    <div class="vcard"><div class="vt">Portfolio</div><div class="dl" style="font-size:10px;color:var(--t2);line-height:1.7">Chart + fills<br>Cycle drill-down<br>Manage-after-fill</div></div>
+    <div class="vcard"><div class="vt">MOMENTUM</div><div class="dl" style="font-size:10px;color:var(--t2);line-height:1.7">Chart<br>Manager panel<br>Readiness / proposal</div></div>
+  </div>
+
+  <!-- COMPONENT REGISTRY -->
+  <div class="eyebrow" style="margin-top:18px">Component registry + replacement — everything pluggable is registered &amp; swappable</div>
+  <div class="settings">
+    <div class="sec"><div class="st">TileRegistry (#7)</div><div class="fld"><span class="fl">register tile types → place by config</span><span class="fv">swap variant</span></div><div class="mut" style="font-size:10px">order.vanilla ↔ order.strategy ↔ order.assisted — same slot, swapped impl</div></div>
+    <div class="sec"><div class="st">OrderActionRegistry (#50)</div><div class="fld"><span class="fl">pluggable entry/exit order types</span><span class="fv">market·limit·stop·bracket…</span></div></div>
+    <div class="sec"><div class="st">MechanismRegistry (#65)</div><div class="fld"><span class="fl">pluggable entry/stop/target derivation</span><span class="fv">ichimoku·atr·breakout…</span></div></div>
+    <div class="sec"><div class="st">ManagerRegistry (#55)</div><div class="fld"><span class="fl">pluggable automatic actions</span><span class="fv">PEAK·pyramid·stop-reenter</span></div></div>
+    <div class="sec"><div class="st">DataSourceRegistry</div><div class="fld"><span class="fl">pluggable WS streams (bus-bound)</span><span class="fv">bars·quotes·account·orders</span></div></div>
+  </div>
+  <div class="mut" style="font-size:10px;margin-top:6px">One pattern everywhere: <code>register(descriptor)</code> → <code>get(id)</code> → render/run. New capability = add a descriptor, no core change. Replacement = swap the registered impl by id. This is why the design-system primitives + tokens matter: registered components must all render consistently.</div>
+
+  <div class="eyebrow" style="margin-top:18px">Tokens &amp; primitives</div>
+  <div class="legend">
+    <div><b>Semantic status</b> — bull/hold <code>#4ade80</code> · bear/exit <code>#f47171</code> · watch <code>#f0b640</code> · info <code>#5aa9f0</code></div>
+    <div><b>Ground</b> — bg <code>#060608</code> · surface <code>#101014</code> · line <code>#1d1d24</code></div>
+    <div><b>Primitives</b> — DataTable · SortHeader · MetricCell · SignalTag · OrderRow · Sparkline · AccountHeader · MetricToggle</div>
+    <div><b>Numerics</b> — mono, tabular-nums, right-aligned, muted secondary (avg/cost)</div>
+  </div>
+
+  <div class="eyebrow">Deliberately rejected from IBKR</div>
+  <div class="rej">
+    <b>×</b> retail cards &amp; big rounded pills · <b>×</b> full-row green/red heat (kills scan discipline) · <b>×</b> sparklines everywhere (watch only) ·
+    <b>×</b> colour without a text label · <b>×</b> giant Buy/Sell buttons inside list rows · <b>×</b> icon-heavy filter chrome (text controls + keyboard) ·
+    <b>×</b> light-theme contrast logic · <b>×</b> hidden metrics in carousels (toggle changes representation, never hides).
+  </div>
+</div>

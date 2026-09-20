@@ -1,0 +1,4 @@
+# Pinned refs this instance deploys. Every ref must be fetchable (bin/check-refs-are-fetchable.sh).
+kumo-trading-platform=main
+kumo-trading-strategies=v0.0.0
+nautilus_trader=1.229.0

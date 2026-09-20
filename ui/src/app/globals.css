@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Ported from predecessor-repo/ui — shadcn OKLCH token system, dark-forced.
+   shadcn/tw-animate imports dropped (cockpit tiles use raw Tailwind, not the base-ui primitives). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+  }
+  html {
+    @apply font-sans;
+    overflow-x: hidden;
+    /* Stop iOS Safari from auto-boosting text inside wide tables (same CSS, different sizes on mobile) —
+       a guide "learned the hard way" rule. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------------
+ * Design-system tokens (#104) — semantic palette, single source with ui/src/lib/design/tokens.ts.
+ * night = default (the cockpit is dark-first); `.day` overrides. DOM utilities below (text-status-bull,
+ * bg-surf, text-t2, …); charts read the same values from tokens.ts. Colour never alone — always + a label.
+ * Additive: nothing consumes these until the tiles migrate (#114), so this introduces no visual change.
+ * ------------------------------------------------------------------------------------------------- */
+@theme inline {
+  --color-ds-bg: var(--ds-bg);
+  --color-ds-bg2: var(--ds-bg2);
+  --color-ds-surf: var(--ds-surf);
+  --color-ds-surf2: var(--ds-surf2);
+  --color-ds-line: var(--ds-line);
+  --color-ds-line2: var(--ds-line2);
+  --color-t1: var(--ds-t1);
+  --color-t2: var(--ds-t2);
+  --color-t3: var(--ds-t3);
+  --color-status-bull: var(--ds-bull);
+  --color-status-bear: var(--ds-bear);
+  --color-status-watch: var(--ds-watch);
+  --color-status-info: var(--ds-info);
+  --color-status-warn: var(--ds-warn);
+}
+
+:root {
+  --ds-bg: #060608;
+  --ds-bg2: #0a0a0d;
+  --ds-surf: #101014;
+  --ds-surf2: #15151b;
+  --ds-line: #1d1d24;
+  --ds-line2: #2a2a33;
+  --ds-t1: #e6e6ea;
+  --ds-t2: #9a9aa4;
+  --ds-t3: #63636d;
+  --ds-bull: #4ade80;
+  --ds-bear: #f47171;
+  --ds-watch: #f0b640;
+  --ds-info: #5aa9f0;
+  --ds-warn: #fb923c;
+  --ds-tenkan: #5aa9f0;
+  --ds-kijun: #f0b640;
+}
+
+.day {
+  --ds-bg: #f6f6f8;
+  --ds-bg2: #eeeef1;
+  --ds-surf: #ffffff;
+  --ds-surf2: #f3f3f5;
+  --ds-line: #e4e4e8;
+  --ds-line2: #d3d3d9;
+  --ds-t1: #18181b;
+  --ds-t2: #52525b;
+  --ds-t3: #6b7280; /* readable muted on light (#9a9aa4 was ~2.9:1 → unreadable); ~5:1 on the light surfaces */
+  --ds-bull: #159a46;
+  --ds-bear: #d63030;
+  --ds-watch: #c07d12;
+  --ds-info: #2563eb;
+  --ds-warn: #c2410c;
+  --ds-tenkan: #2563eb;
+  --ds-kijun: #b7791f;
+}

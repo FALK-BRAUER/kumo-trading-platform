@@ -1,0 +1,9 @@
+{
+  "_comment": "ILLUSTRATIVE. Sleeve allocations in account currency; *_SLOTS are decision times.",
+  "MOMENTUM-002": 10000,
+  "MOMENTUM-002_SLOTS": ["open+5m", "close-20m"],
+  "MANUAL-001": 0,
+  "QC27_ENABLED": false,
+  "QC27_UNIVERSE": ["AAPL", "MSFT", "NVDA"],
+  "QC345_ENABLED": false
+}

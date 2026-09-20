@@ -1,0 +1,400 @@
+[
+ {
+  "id": 1565,
+  "ts": "2026-09-15T13:35:00.59449+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "risk",
+  "detail": {
+   "stale": [
+    "ledger_book"
+   ]
+  }
+ },
+ {
+  "id": 1566,
+  "ts": "2026-09-15T13:35:00.595029+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "risk",
+  "detail": {
+   "stale": [
+    "ledger_book"
+   ]
+  }
+ },
+ {
+  "id": 1567,
+  "ts": "2026-09-15T13:35:00.624556+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "state",
+  "detail": {
+   "state": "TRADING",
+   "exited": [],
+   "blocked": "pool sources stale or failed: ledger_book",
+   "decided": false,
+   "entered": [],
+   "submitted": 0,
+   "submitted_basis": "accepted-by-nautilus-locally, not venue-confirmed"
+  }
+ },
+ {
+  "id": 1568,
+  "ts": "2026-09-15T13:35:00.625236+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "state",
+  "detail": {
+   "state": "TRADING",
+   "exited": [],
+   "blocked": "pool sources stale or failed: ledger_book",
+   "decided": false,
+   "entered": [],
+   "submitted": 0,
+   "submitted_basis": "accepted-by-nautilus-locally, not venue-confirmed"
+  }
+ },
+ {
+  "id": 1617,
+  "ts": "2026-09-15T14:31:13.125622+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": "WPM",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-WPM-XNYS-b98d6640"
+  }
+ },
+ {
+  "id": 1911,
+  "ts": "2026-09-15T19:40:00.342369+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-15",
+  "slot": "close-20m",
+  "symbol": null,
+  "kind": "risk",
+  "detail": {
+   "stale": [
+    "ledger_book"
+   ]
+  }
+ },
+ {
+  "id": 1912,
+  "ts": "2026-09-15T19:40:00.356415+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-15",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "state",
+  "detail": {
+   "state": "TRADING",
+   "exited": [],
+   "blocked": "pool sources stale or failed: ledger_book",
+   "decided": false,
+   "entered": [],
+   "submitted": 0,
+   "submitted_basis": "accepted-by-nautilus-locally, not venue-confirmed"
+  }
+ },
+ {
+  "id": 2836,
+  "ts": "2026-09-16T13:46:31.283082+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "SM",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 232,
+   "client_order_id": "PROT-SELL-SM-XNYS-bed80e66"
+  }
+ },
+ {
+  "id": 2837,
+  "ts": "2026-09-16T13:46:31.292475+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "SM",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 132,
+   "client_order_id": "PROT-SELL-SM-XNYS-bed80e66"
+  }
+ },
+ {
+  "id": 2838,
+  "ts": "2026-09-16T13:46:31.299335+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "SM",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 32,
+   "client_order_id": "PROT-SELL-SM-XNYS-bed80e66"
+  }
+ },
+ {
+  "id": 2839,
+  "ts": "2026-09-16T13:46:31.317346+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "SM",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-SM-XNYS-bed80e66"
+  }
+ },
+ {
+  "id": 2872,
+  "ts": "2026-09-16T14:16:23.560926+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "APA",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 80,
+   "client_order_id": "PROT-SELL-APA-XNAS-2fe0172d"
+  }
+ },
+ {
+  "id": 2873,
+  "ts": "2026-09-16T14:16:23.60383+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "APA",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-APA-XNAS-2fe0172d"
+  }
+ },
+ {
+  "id": 2958,
+  "ts": "2026-09-16T15:35:13.157209+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "GRDN",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 184,
+   "client_order_id": "PROT-SELL-GRDN-XNYS-66aa2070"
+  }
+ },
+ {
+  "id": 2959,
+  "ts": "2026-09-16T15:35:13.183509+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "GRDN",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 84,
+   "client_order_id": "PROT-SELL-GRDN-XNYS-66aa2070"
+  }
+ },
+ {
+  "id": 2960,
+  "ts": "2026-09-16T15:35:13.650904+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "GRDN",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-GRDN-XNYS-66aa2070"
+  }
+ },
+ {
+  "id": 3141,
+  "ts": "2026-09-16T19:05:22.66159+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "HPQ",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 181,
+   "client_order_id": "PROT-SELL-HPQ-XNYS-0ecaee8f"
+  }
+ },
+ {
+  "id": 3142,
+  "ts": "2026-09-16T19:05:22.689301+00:00",
+  "strategy_id": "BCTROT-004",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "HPQ",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-HPQ-XNYS-0ecaee8f"
+  }
+ },
+ {
+  "id": 3147,
+  "ts": "2026-09-16T19:10:45.320265+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "CVE",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 278,
+   "client_order_id": "PROT-SELL-CVE-XNYS-baebde85"
+  }
+ },
+ {
+  "id": 3148,
+  "ts": "2026-09-16T19:10:45.352599+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "CVE",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 178,
+   "client_order_id": "PROT-SELL-CVE-XNYS-baebde85"
+  }
+ },
+ {
+  "id": 3149,
+  "ts": "2026-09-16T19:10:45.373087+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-16",
+  "slot": "open+5m",
+  "symbol": "CVE",
+  "kind": "order",
+  "detail": {
+   "by": "protection",
+   "ok": true,
+   "side": "SELL",
+   "issue": "issue 133",
+   "phase": "terminal",
+   "position_after": 0,
+   "client_order_id": "PROT-SELL-CVE-XNYS-baebde85"
+  }
+ },
+ {
+  "id": 4074,
+  "ts": "2026-09-17T13:35:00.435693+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-17",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "risk",
+  "detail": {
+   "stale": [
+    "ledger_book"
+   ]
+  }
+ },
+ {
+  "id": 4075,
+  "ts": "2026-09-17T13:35:00.453385+00:00",
+  "strategy_id": "MOMENTUM-002",
+  "session": "2026-09-17",
+  "slot": "open+5m",
+  "symbol": null,
+  "kind": "state",
+  "detail": {
+   "state": "TRADING",
+   "exited": [],
+   "blocked": "pool sources stale or failed: ledger_book",
+   "decided": false,
+   "entered": [],
+   "submitted": 0,
+   "submitted_basis": "accepted-by-nautilus-locally, not venue-confirmed"
+  }
+ }
+]

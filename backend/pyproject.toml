@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kumo-trading-platform-backend"
+version = "0.1.0"
+description = "FastAPI + NautilusTrader backend for the kumo-trading-platform trading UI"
+readme = "README.md"
+license = "LGPL-3.0-or-later"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "nautilus_trader[ib]==1.229.0",
+    "redis",
+    "jsonschema>=4",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+# THE STRATEGIES PACKAGE — every lane adapter, the calendar, the journal (73 test files import it).
+# An extra, not a core dependency, because the docker image does not read this line: it installs the
+# sibling checkout (`deploy/compose.paper.yml`, `additional_contexts: strategies`). Pinned to a TAG of
+# the public strategies repository; `instances/example/versions.lock` names the same tag.
+strategies = [
+    "kumo-trading-strategies @ git+https://github.com/FALK-BRAUER/kumo-trading-strategies.git@v0.0.0",
+]
+api = ["fastapi", "uvicorn[standard]", "websockets"]
+# The Databento feed client (api/providers/databento.py imports it at module level; the provider is
+# declared but unused — CLAUDE.md "Market data comes from the BROKER"). Without this extra
+# `uv sync --all-extras` leaves 114 test modules uncollectable: ModuleNotFoundError 'databento'.
+data = ["databento"]
+alpaca = ["aiohttp"]
+db = ["sqlalchemy[asyncio]>=2.0", "asyncpg>=0.29", "alembic"]
+ibkr = ["nautilus_trader[ib]==1.229.0", "docker"]
+dev = ["pytest>=8", "pytest-asyncio", "ruff>=0.5", "mypy>=1.10", "pre-commit"]
+test = [
+    "fastapi",
+    "uvicorn[standard]",
+    "websockets",
+    "aiohttp",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic",
+    "nautilus_trader[ib]==1.229.0",
+    "docker",
+    "pytest>=8",
+    "pytest-asyncio",
+    "httpx2",
+]
+
+[tool.setuptools.packages.find]
+include = ["api*", "adapters*", "actions*", "config*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+addopts = "-m 'not engine and not needs_services'"
+markers = [
+    "slow: real wall-clock waits (seconds)",
+    "engine: builds its own BacktestEngine(s); run each engine-marked file in a separate process",
+    "needs_services: integration test requiring live Redis and/or Postgres",
+    "instances: reads a sibling instances checkout; skipped where absent",
+    "captured_fixture(name): reads a captured fixture when present; skipped where absent",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"

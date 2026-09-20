@@ -1,0 +1,25 @@
+name: backend
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync
+        run: uv sync --all-extras
+        working-directory: backend
+      - name: Lint
+        # RATCHETED, NOT A GATE: the tree carries ~700 ruff findings (741 in the private tree under
+        # its own config on 2026-09-18); a red lint on day one is a gate everyone learns to ignore.
+        # Reported, never blocking, until the count is driven down and this line loses --exit-zero.
+        run: uv run ruff check . --exit-zero --statistics
+        working-directory: backend
+      - name: Test
+        run: uv run pytest -q
+        working-directory: backend

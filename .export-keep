@@ -1,0 +1,20 @@
+# Files the PUBLIC scaffold owns. `bin/export-to-public.sh` syncs the private tree over this clone
+# with `rsync --delete` and KEEPS exactly these paths — everything else is replaced by the export.
+# Every entry must exist here: a keep entry naming nothing is an exclusion in disguise (P7).
+# One list, in the repo it protects, so a reader of either side sees the same set.
+LICENSE
+LICENSE.GPL-3.0
+README.md
+RELEASE.md
+CONTRIBUTING.md
+CLAUDE.md
+.gitignore
+.editorconfig
+.pre-commit-config.yaml
+.github/
+.claude/
+bin/hooks/
+instances/
+backend/pyproject.toml
+.export-keep
+.public-last-export

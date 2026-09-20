@@ -1,0 +1,4365 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "kumo-trading-platform API",
+    "summary": "UI\u2194FastAPI\u2194Nautilus bridge (live-trading cockpit). REST + WebSocket, render-only UI.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Health",
+        "description": "Live connection/health across every dependency (#26) \u2014 the UI polls this for the global banner.\n\nThe api answers even when degraded. `status` is \"ok\" only when every subsystem is up AND the book\nis safe to size from: an unpriced book, a stale feed, or a claims/cache split divergence each\ndegrade it alone. It has not been \"all subsystems are up\" since #757, and this line said it was\nuntil #817.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/positions": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Positions",
+        "description": "Live read of the Nautilus cache \u2192 typed positions.",
+        "operationId": "getPositions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slots": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Slots",
+        "description": "Every strategy slot that decided and did nothing, attempted and lost it, or errored (#349).\n\n`judge_slot` has been correct since it was written and had NO caller: QC345's 2026-08-21 session\nis `decisions 1, intents 0` in TRADING, which is `DECIDED, NEVER ATTEMPTED` exactly. It went\nunseen for a week while four separate tickets were filed about its symptoms.\n\nServed as a plain dict, not a `response_model` \u2014 this shape has silently eaten a published field\nthree times (#233, #322, #336).",
+        "operationId": "getSlots",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 72,
+              "title": "Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Getslots"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Claims",
+        "description": "Claims-vs-account: who claims what, and what that costs (#437).\n\nUNREACHABLE UNTIL NOW. `build_breaches` was written, tested and documented with the incident it\ncaught, and no route served it \u2014 so the platform's own answer to \"is any position frozen\" lived in\na terminal. The alarm that found BETA (79 held, 2 sellable) came from an ad-hoc monitor script.\n\nNOT a `response_model`. A Pydantic DTO silently drops keys it does not declare, and this payload\nhas eaten a published field three times already (#233, #322, #336) \u2014 `sellable` and `stranded`\nwould be exactly the next two. The dict is returned as it is built.\n\nThe account comes from the engine's own netted legs rather than a second broker call: the two were\nverified identical across all six held symbols on 2026-08-22, and the venue rate-limits.",
+        "operationId": "getClaims",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Getclaims"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trades": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Trades",
+        "description": "The trade-cycle plane (#73) \u2014 native positions/snapshots/orders projected into cycles (HELD/ARMED/\nWATCH/CLOSED) with cycle_id + cycle-total P&L. Empty on the data-only synthetic node.",
+        "operationId": "getTrades",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pnl/unrealized-base": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Unrealized Base",
+        "description": "Per-lane unrealized at each window's START, from the EOD observation table (#699 / #734).\n\nTHE HALF THE TILE CANNOT COMPUTE. It already knows each lane's standing unrealized NOW; the\ndelta it wants is `now \u2212 base`, and the broker publishes only account-level curves. This serves\nthe base.\n\nITS OWN ENDPOINT, not a field on `/trades`. That one is pushed on every engine frame and this\nneeds a database read \u2014 one per frame would put a Postgres round trip on the hot path for an\nanswer that changes once a day. All periods come back together so switching the selector cannot\nbriefly show one window's base against another's standing.\n\nET, NOT THE CONTAINER'S CLOCK. Session dates in the table are ET and the container runs UTC;\nafter 20:00 ET they are different days, so a local date would ask for tomorrow's base all evening\nand get nothing, every evening, silently. `venue_hours` documents the same trap and `eod_hook`\nwas caught by it.\n\nNEVER RAISES. A failed read answers with everything UNKNOWN and says which dates failed, rather\nthan an error page \u2014 the tile then draws em dashes, which is correct, instead of leaving an\noperator unable to tell a broken endpoint from a broken stack. Same contract `/health` states.",
+        "operationId": "getUnrealizedBase",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WindowBaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-activity": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get External Activity",
+        "description": "The quarantine plane (#79) \u2014 broker activity the cockpit didn't originate, surfaced so it never\nsilently joins a strategy's P&L. Reads native cache rows only: a transfer genuinely reduces the source\nposition, so there is nothing to subtract here.",
+        "operationId": "getExternalActivity",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalActivityResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Account",
+        "description": "Account snapshot (#41) \u2014 equity/cash/buying-power for %-of-equity sizing. None until the first frame.",
+        "operationId": "getAccount",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AccountDTO"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Getaccount"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List Settings",
+        "description": "The registered settings domains (one JSON Schema per domain in the repo).",
+        "operationId": "listSettings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object",
+                  "title": "Response Listsettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/{domain}": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Settings",
+        "description": "A domain's JSON Schema (the contract the UI renders + validates against) + its resolved values\n(schema defaults merged with the values file, coerced).",
+        "operationId": "getSettings",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Getsettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Put Settings",
+        "description": "Validate values strictly against the domain schema and persist them (atomic). 422 with per-field\nerrors if invalid \u2014 nothing invalid is written. Returns the resolved (defaulted) values.",
+        "operationId": "putSettings",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Values"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Putsettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strategies": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get Strategies",
+        "description": "Every declared strategy with its capital sleeve (#320).\n\nOne place that answers \"what strategies exist, and how much is each allowed\" \u2014 the question an\noperator has to answer before touching a target. The registry supplies identity; the sleeve supplies\n`target` (intent) and `actual` (the sleeve's net asset value). The gap between them IS the\ninstruction: `actual > target` means the strategy is reducing, `actual < target` means it is growing\ninto its allocation as capital arrives.\n\nA declared strategy with no sleeve row reports zeros rather than being omitted. Absent and\nzero-allocated are different states, and hiding the former is how a strategy silently never gets\nfunded.\n\nREAD-ONLY. Targets are edited through the `strategies` SETTINGS domain, which already renders a\nform from its schema with no per-setting UI code. A second write path here would be a second place\nto validate the same number, and the two would disagree.",
+        "operationId": "getStrategies",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Getstrategies"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instruments/search": {
+      "get": {
+        "tags": [
+          "instruments"
+        ],
+        "summary": "Search Instruments",
+        "description": "Ranked instrument search over the tradable catalog (symbol- and name-weighted). Blank `q` \u2192 empty.\n\n503 when search is unavailable (provider isn't Alpaca / keys unset) or the catalog hasn't loaded yet.",
+        "operationId": "searchInstruments",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Get Orders",
+        "description": "The Orders blotter (#33) \u2014 working orders first, then recent terminal. Read-only projection of the\nengine's order cache streamed over ui:stream.",
+        "operationId": "getOrders",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdersResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Submit Order",
+        "description": "Submit a discretionary MANUAL-strategy order \u2192 a `submit_order` command over the command layer (#32/#5).\nThe api mints the client_order_id (idempotency key). `ok` here means ENQUEUED, not placed \u2014 the order is\nonly PLACED if the engine is armed (KUMO_ORDERS_ARMED); poll `GET /commands/{command_id}` for accept/reject\n(#39). Human-gated \u2014 this relays the human's explicit order, it originates nothing.",
+        "operationId": "submitOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/bracket": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Submit Bracket",
+        "description": "Submit a bracketed entry (#34) \u2192 a `submit_bracket` command. The api mints the entry + protective\nstop (+ optional target) client_order_ids; the engine arms the protective legs on the entry fill (OTO)\nand OCO-links them. `ok` = enqueued; poll `GET /commands/{command_id}` for accept/reject. Human-gated.",
+        "operationId": "submitBracket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BracketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{client_order_id}/cancel": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Cancel Order",
+        "description": "Cancel a working order \u2192 a `cancel_order` command. Risk-reducing; still gated by KUMO_ORDERS_ARMED\n(a disarmed engine acks it as such and does nothing). Poll `GET /commands/{command_id}` for accept/reject.",
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "name": "client_order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Client Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{client_order_id}/modify": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Modify Order",
+        "description": "Modify a working order's qty/price/trigger \u2192 a `modify_order` command (only supplied fields change).",
+        "operationId": "modifyOrder",
+        "parameters": [
+          {
+            "name": "client_order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Client Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModifyOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/commands/{command_id}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Get Command Status",
+        "description": "Engine ack for a command (#39). No ack yet \u2192 `pending` (the caller applies its OWN timeout \u2192 `unknown`;\na lost ack must never read as a false `rejected`). Ack seen \u2192 engine status `ok`\u2192`accepted`, else\n`rejected` (with the engine's `error`). After `accepted`, the Orders blotter is the authoritative lifecycle.",
+        "operationId": "getCommandStatus",
+        "parameters": [
+          {
+            "name": "command_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Command Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instruments/{instrument_id}/stream": {
+      "post": {
+        "tags": [
+          "instruments"
+        ],
+        "summary": "Request Stream",
+        "description": "Ask the engine to stream this symbol on demand (viewing a search result). Idempotent, TTL'd.",
+        "operationId": "requestStream",
+        "parameters": [
+          {
+            "name": "instrument_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instrument Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Requeststream"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eod/backfill": {
+      "post": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Eod Backfill",
+        "description": "Write reconstructed end-of-day position history for the given sessions (#734).\n\nOPERATOR-DRIVEN AND GATED OFF (`KUMO_EOD_BACKFILL`). This endpoint is a convenience; the ENGINE\nre-checks the gate, because a hand-crafted bus message must not reach a write path the operator\nnever enabled \u2014 a check that lives only here would make the endpoint's absence cosmetic.\n\nApplied in the engine rather than here: the acceptance gate compares against the LIVE Nautilus\ncache, and this process holds only stale snapshots. Same reason as `transfer_position`.\n\n`sessions` (list of YYYY-MM-DD) and `ledger_start` are both REQUIRED. `ledger_start` states what\nthe activity fetch COVERS and is never inferred from the earliest fill \u2014 that is a property of the\nfetch, so a ledger truncated by a lookback window would report its own truncation point as the\naccount's inception.\n\n`ok` means ENQUEUED. Poll `GET /commands/{command_id}` for the outcome: the gate runs there, and a\ndisagreeing gate writes NOTHING and reports why.",
+        "operationId": "eodBackfill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/positions/flatten": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Flatten Position",
+        "description": "Close a position, long or short (#170 first slice).\n\n`ok` means ENQUEUED. The engine sizes the close against its LIVE position and rejects if the position\nmoved since the operator read it \u2014 poll `GET /commands/{command_id}` for the outcome. Human-gated: this\nplaces a real order and only runs when the engine is armed.",
+        "operationId": "flattenPosition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlattenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strategies/{strategy_id}/liquidate": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Liquidate Lane",
+        "description": "Flatten a LANE's whole book, now (#922) \u2014 the act behind the #873 LIQUIDATE condition.\n\n`ok` means ENQUEUED. The engine writes LIQUIDATING first (so the lane cannot re-enter), cancels the lane's\nworking orders, closes every open position through the lane's own strategy (DAY market orders), drops\nthe claims, re-reads the book and reports what remains \u2014 poll `GET /commands/{command_id}`: the ack's\n`results` carries submitted / held / failed / remainder, and `partial` or `refused` arrive as errors with\nthe same report. Human-gated: real orders, only when the engine is armed.",
+        "operationId": "liquidateLane",
+        "parameters": [
+          {
+            "name": "strategy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Strategy Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiquidateLaneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/managers": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Get Managers",
+        "description": "Every manager instance (#55) and its current state, whatever the kind.\n\nRead directly from Postgres \u2014 the ack for the original attach command expires long before an overnight\nmanager fires, so this is the durable source a screen re-opened hours later reads instead.",
+        "operationId": "getManagers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/managers/attach": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Attach Manager",
+        "description": "Arm a manager instance (#55/#47) \u2014 e.g. STOP-AND-REENTER's `stop_reenter_watch` on a HELD position.\n\n`ok` means ENQUEUED, not armed yet \u2014 poll `GET /commands/{command_id}` for the engine's accept/reject\n(a mismatched position, disarmed orders, or an unknown `kind` reject here). Human-gated: arming IS the\nconfirmation (2026-08-02) \u2014 once armed, the action fires with no further per-trigger approval.",
+        "operationId": "attachManager",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachManagerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/managers/{manager_id}/cancel": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Cancel Manager",
+        "description": "Deactivate an armed manager (#55/#47) \u2014 the toggle's OFF path. A no-op (`ok`) if the manager already\nreached a terminal state (APPLIED/FAILED/CANCELLED); never overwrites a real outcome.",
+        "operationId": "cancelManager",
+        "parameters": [
+          {
+            "name": "manager_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Manager Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelManagerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/market/rotation": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Rotation",
+        "description": "The rotation read \u2014 published by the engine off our own bars (#351, #384).\n\nEach axis is a RATIO of two ETFs, graded by the same weekly-governs / daily-times Ichimoku stack\nthat grades single names. THAT STACK IS KUMO CODE \u2014 `strategies/rotation_grade.py`. It used to be\nimported at runtime from a host mount behind `KUMO_LEDGER_TOOL_TOOLS`, which meant an env var could\nswitch the market view off and `/nonexistent` read as deliberate configuration.\n\nIT USED TO COME OFF DISK, AND NO LONGER DOES. A sidecar shelled out to that tool on a host mount,\nwrote `rotation.json`, and this route read it back. 2026-08-21: \"it should not feed from a\nfile\". What was wrong with it:\n\n  * A SECOND DATA SOURCE. The tool pulls daily OHLC from Yahoo, so the cockpit graded rotations off\n    one feed while trading off another. Same session, two answers available.\n  * NO RELATIONSHIP TO ENGINE LIVENESS. On 2026-08-21 the sidecar's bind mount went stale, every\n    refresh failed with `FileNotFoundError`, and this route served a four-hour-old payload with no\n    indication anything was wrong \u2014 because a file that is present and parseable looks healthy.\n  * A FILE IS NOT A PLANE. Everything else here \u2014 trades, account, equity_curve, session \u2014 is\n    published by the engine and carried on the bus.\n\nABSENCE IS STILL THE INTERESTING CASE, and it is reported exactly as before. Nothing published yet\nis an ERROR with an empty axes list and a null `generated`, never an empty rotation: \"there is no\nrotation right now\" and \"nobody has looked\" are different claims, and rendering the first for the\nsecond turns a dead feed into a calm market. Same rule as an unpriced symbol that must not render as\nflat (#356).\n\nThe payload is passed through UNCHANGED. The contract belongs to the tool; reshaping it here would\nput a second schema between generator and tile.",
+        "operationId": "getRotation",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Getrotation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sleeves/distribute": {
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Distribute Unallocated Capital",
+        "description": "Put unallocated capital to work, proportionally to how short each sleeve is (#373).\n\nTHE MECHANISM ALREADY EXISTED AND NOTHING COULD CALL IT. `plan_distribution` (proportional to\nshortfall, conservation- and intent-capped) and `distribute_unallocated` (idempotent, single\ntransaction) were both written and both tested \u2014 and `grep` found them referenced only from their\nown test files. On 2026-08-19 BCTROT-004 and QC345-003 sat at `target 20000, actual 0`, `deployable`\npinned at 0 and unable to open a position, while $45,000.00 sat unallocated. The only route to\nfunding them was waiting for MOMENTUM to sell something.\n\nSo this route adds no arithmetic. It is the caller the primitive never had.\n\n`available` is optional and defaults to whatever UNALLOCATED holds. It is exposed because that\ndefault is known to be wrong: `mark_to_market` has no production caller either, so `actual` is\ndecrement-only and drifts from the account the moment a position moves. An operator with the broker\ncash figure in front of them has a better number than the book does, and the primitive already\naccepts it.\n\n`run_id` makes a retry safe. Allocation ids are derived from it, and `SleeveTransfer.fill_id` is\nuniquely indexed, so the same run lands once however many times it is submitted \u2014 the same\nguarantee fills get. A caller that omits it gets a fresh one, which means a double-click funds twice;\nthat is the caller's choice to make, and the UI will pass one.",
+        "operationId": "distributeUnallocated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Distributeunallocated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transfers": {
+      "get": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Get Transfers",
+        "description": "Internal position transfers and their outbox state (#80 spin-off).",
+        "operationId": "getTransfers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransfersResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "transfers"
+        ],
+        "summary": "Transfer Position",
+        "description": "Move a position (or part of one) from one strategy to another.\n\nPlaces NO order: the broker net is identical before and after, and only the owning strategy changes. `ok`\nmeans ENQUEUED \u2014 the engine validates against its live cache (the api holds only stale snapshots) and the\naccept/reject arrives via `GET /commands/{command_id}`.",
+        "operationId": "transferPosition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/watchlist": {
+      "get": {
+        "tags": [
+          "watchlist"
+        ],
+        "summary": "Get Watchlist",
+        "description": "The runtime watchlist (Postgres) \u2014 instrument ids, oldest-added first.",
+        "operationId": "getWatchlist",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "watchlist"
+        ],
+        "summary": "Add Watchlist",
+        "description": "Add a symbol to the watchlist (idempotent) \u2192 the updated list.",
+        "operationId": "addWatchlist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchlistAdd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/watchlist/{instrument_id}": {
+      "delete": {
+        "tags": [
+          "watchlist"
+        ],
+        "summary": "Remove Watchlist",
+        "description": "Remove a symbol from the watchlist \u2192 the updated list.",
+        "operationId": "removeWatchlist",
+        "parameters": [
+          {
+            "name": "instrument_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instrument Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pool": {
+      "get": {
+        "tags": [
+          "pool"
+        ],
+        "summary": "Get Pool",
+        "description": "The symbol pool with operator overrides, plus per-source freshness.",
+        "operationId": "getPool",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pool/source/{name}": {
+      "post": {
+        "tags": [
+          "pool"
+        ],
+        "summary": "Refresh Pool Source",
+        "description": "Replace a source's whole set \u2014 the write end of the instance-supplied refreshers (#486).\n\nAn instance owns WHERE its symbols come from: a folder, a Google Sheet, a CSV in GitHub, a script.\nThe platform owns only the contract, which is this endpoint. It writes nothing itself; the single\nwriter stays in `PgSymbolPool`.",
+        "operationId": "refreshPoolSource",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoolSourceRefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pool/override": {
+      "post": {
+        "tags": [
+          "pool"
+        ],
+        "summary": "Set Pool Override",
+        "description": "Pin or exclude a symbol \u2192 the updated pool.\n\nTakes effect at the NEXT session, not immediately: an exclude marks the symbol for liquidation\nwhen the strategy next runs, it does not sell anything here.",
+        "operationId": "setPoolOverride",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoolOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pool/override/{symbol}/{kind}": {
+      "delete": {
+        "tags": [
+          "pool"
+        ],
+        "summary": "Clear Pool Override",
+        "description": "Remove a pin or exclude \u2192 the updated pool.",
+        "operationId": "clearPoolOverride",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws/contract": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "WS frame contract (codegen anchor \u2014 do not call)",
+        "description": "Documents the `/ws/stream` frame shape so the TS client generates WS types too.\n\nWebSocket payloads are invisible to OpenAPI, so this REST stub pins the discriminated\n`bar | fill | status` union into the schema. Not used at runtime by the UI.",
+        "operationId": "getWsContract",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BarMessage"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FillMessage"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StatusMessage"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SnapshotMessage"
+                    }
+                  ],
+                  "title": "Response Getwscontract"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountDTO": {
+        "properties": {
+          "equity": {
+            "type": "number",
+            "title": "Equity"
+          },
+          "cash": {
+            "type": "number",
+            "title": "Cash"
+          },
+          "buying_power": {
+            "type": "number",
+            "title": "Buying Power"
+          },
+          "multiplier": {
+            "type": "number",
+            "title": "Multiplier",
+            "default": 1.0
+          },
+          "long_market_value": {
+            "type": "number",
+            "title": "Long Market Value",
+            "default": 0.0
+          },
+          "last_equity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Equity"
+          },
+          "unrealized_standing_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Standing Total"
+          },
+          "unrealized_intraday_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Intraday Total"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "ts": {
+            "type": "integer",
+            "title": "Ts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "equity",
+          "cash",
+          "buying_power",
+          "ts"
+        ],
+        "title": "AccountDTO",
+        "description": "Account snapshot (#41) \u2014 Alpaca's own equity (net-liq / portfolio_value) / free cash / buying_power /\nmultiplier, for %-of-equity order sizing + affordability gating. `multiplier` = 1 cash, 2/4 margin/PDT\n(buying_power \u2248 multiplier \u00d7 equity). Falls back to a Nautilus-derived estimate on a synthetic node."
+      },
+      "AttachManagerRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "cycle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Id"
+          },
+          "leash": {
+            "type": "string",
+            "const": "AUTO",
+            "title": "Leash",
+            "default": "AUTO"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "instrument_id",
+          "params"
+        ],
+        "title": "AttachManagerRequest",
+        "description": "`POST /managers/attach` body (#47's `stop_reenter_watch` is the first UI-reachable caller \u2014 the\nprimitive itself, `_handle_attach_manager`, is generic across every manager kind and reusable by #46/#38\nlater without a new endpoint).\n\n`params` is kind-specific and validated server-side by that kind's `validate_params` (`api.managers`) \u2014\nthis DTO stays a thin envelope, not a per-kind schema, so a new kind never needs a new request model.\n`leash` defaults to AUTO \u2014 the only leash this session's semi-auto UX actually exercises (arming IS the\nhuman gate, no per-action confirm step; see `docs/design-system/STYLE_GUIDE.md` Layer 5)."
+      },
+      "BarDTO": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "ts_event": {
+            "type": "integer",
+            "title": "Ts Event"
+          },
+          "open": {
+            "type": "number",
+            "title": "Open"
+          },
+          "high": {
+            "type": "number",
+            "title": "High"
+          },
+          "low": {
+            "type": "number",
+            "title": "Low"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close"
+          },
+          "volume": {
+            "type": "number",
+            "title": "Volume"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "ts_event",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume"
+        ],
+        "title": "BarDTO",
+        "description": "One OHLCV bar as emitted by a Nautilus `on_bar` event."
+      },
+      "BarMessage": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "bar",
+            "title": "Type",
+            "default": "bar"
+          },
+          "data": {
+            "$ref": "#/components/schemas/BarDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "BarMessage"
+      },
+      "BracketRequest": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity"
+          },
+          "entry_order_type": {
+            "type": "string",
+            "title": "Entry Order Type",
+            "default": "market"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "stop_trigger": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Stop Trigger"
+          },
+          "target_price": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Target Price"
+          },
+          "time_in_force": {
+            "type": "string",
+            "title": "Time In Force",
+            "default": "day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "side",
+          "quantity",
+          "stop_trigger",
+          "target_price"
+        ],
+        "title": "BracketRequest",
+        "description": "A native Nautilus bracket (#34): entry + protective STOP + take-profit TARGET (all required \u2014 a\nbracket is the full trio; entry+stop-only is a separate feature). The api mints the entry/stop/target\nclient_order_ids; Nautilus's OrderEmulator manages the OTO/OCO/OUO contingencies."
+      },
+      "CancelManagerRequest": {
+        "properties": {},
+        "type": "object",
+        "title": "CancelManagerRequest",
+        "description": "`POST /managers/{manager_id}/cancel` body \u2014 the toggle's OFF path. Empty on purpose: `manager_id`\ncomes from the path, and cancellation needs no other input (the engine refuses to touch an\nalready-terminal manager, see `_handle_cancel_manager_command`)."
+      },
+      "CommandResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "command_id": {
+            "type": "string",
+            "title": "Command Id"
+          },
+          "client_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Order Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "command_id"
+        ],
+        "title": "CommandResponse",
+        "description": "Response to a command POST (submit/bracket/cancel/modify) \u2014 #39. `ok` means the command was ENQUEUED\non the bus (not that the order was placed). Correlate `command_id` via `GET /commands/{id}` for the\nengine's accept/reject; `client_order_id` correlates the broker/order lifecycle (Orders blotter)."
+      },
+      "CommandStatusResponse": {
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "title": "Command Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "command_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Type"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "command_id",
+          "status"
+        ],
+        "title": "CommandStatusResponse",
+        "description": "Engine ack for a UI command (#39). `status`: `pending` (no ack yet \u2014 the caller applies its own\ntimeout \u2192 `unknown`, never a false reject) \u00b7 `accepted` (engine took it; the Orders blotter is\nauthoritative thereafter) \u00b7 `rejected` (engine refused \u2014 disarmed/malformed; `error` carries why).\n\n`detail` is an informational message on an ACCEPTED command \u2014 e.g. a flatten that was queued rather than\nsubmitted immediately (#170 spin-off). Kept distinct from `error`: a message on a command that succeeded\nis not an error, and conflating them would make \"accepted with an error string\" read as a rejection."
+      },
+      "DriftEntry": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "broker_qty": {
+            "type": "number",
+            "title": "Broker Qty"
+          },
+          "platform_qty": {
+            "type": "number",
+            "title": "Cockpit Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "broker_qty",
+          "platform_qty"
+        ],
+        "title": "DriftEntry",
+        "description": "One broker-vs-cache position mismatch (#26) \u2014 built by the exec adapter's reconcile pass\n(`providers/alpaca/exec_client.py`), published on the bus, and folded into `HealthResponse` as-is."
+      },
+      "ExternalActivityDTO": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ORDER",
+              "POSITION"
+            ],
+            "title": "Source"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "VENUE",
+              "RECONCILIATION",
+              "FOREIGN",
+              "UNKNOWN"
+            ],
+            "title": "Origin"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "QUARANTINED"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "realized_pnl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Pnl"
+          },
+          "client_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Order Id"
+          },
+          "order_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Status"
+          },
+          "avg_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Px"
+          },
+          "last_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Px"
+          },
+          "market_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Value"
+          },
+          "unrealized_pl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Pl"
+          },
+          "unrealized_plpc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Plpc"
+          },
+          "ts_last": {
+            "type": "integer",
+            "title": "Ts Last"
+          },
+          "venue_qty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "client_id",
+          "instrument_id",
+          "source",
+          "strategy_id",
+          "origin",
+          "side",
+          "quantity",
+          "ts_last"
+        ],
+        "title": "ExternalActivityDTO",
+        "description": "Broker activity NOT originated by the cockpit (#79) \u2014 a native-EXTERNAL order/position (manual at the\nbroker, or reconciliation-generated) or a foreign strategy's. QUARANTINED: visible so it can't silently\njoin a strategy's P&L, but never attached to a cycle (that's the coordinator's job, #80). Strategy P&L stays\n\u03a3(TradeDTO) for OWNED strategies only; this contributes only to the broker-vs-cycle net discrepancy."
+      },
+      "ExternalActivityResponse": {
+        "properties": {
+          "external": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalActivityDTO"
+            },
+            "type": "array",
+            "title": "External"
+          }
+        },
+        "type": "object",
+        "required": [
+          "external"
+        ],
+        "title": "ExternalActivityResponse",
+        "description": "REST `GET /external-activity` payload \u2014 the quarantine plane (#79)."
+      },
+      "FillDTO": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "ts_event": {
+            "type": "integer",
+            "title": "Ts Event"
+          },
+          "order_type": {
+            "type": "string",
+            "title": "Order Type"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "side",
+          "quantity",
+          "price",
+          "ts_event",
+          "order_type",
+          "strategy_id"
+        ],
+        "title": "FillDTO",
+        "description": "An order fill from a Nautilus `OrderFilled` event."
+      },
+      "FillMessage": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "fill",
+            "title": "Type",
+            "default": "fill"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FillDTO"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "FillMessage"
+      },
+      "FlattenRequest": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "expected_side": {
+            "type": "string",
+            "title": "Expected Side"
+          },
+          "expected_qty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Qty"
+          },
+          "cycle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "strategy_id",
+          "expected_side"
+        ],
+        "title": "FlattenRequest",
+        "description": "`POST /positions/flatten` body (#170 first slice).\n\n`expected_side`/`expected_qty` are what the human SAW when they confirmed. The engine sizes the close\nfrom its own live cache and rejects if reality has moved \u2014 an exit sized at render time can reverse the\nposition instead of closing it. No price or order type: in regular hours this is a market order; outside\nthem there usually isn't a reliable two-sided quote to price into, so the engine ATTACHES a\n`deferred_flatten` manager (#55, `GET /managers`) instead and submits at the next open \u2014 see `api.flatten`\nfor why the engine queues rather than prices into a bad spread.\n\n`cycle_id` (optional) is the cycle the operator was looking at when they confirmed \u2014 if the position's\ncycle changes while a deferred flatten sits queued (closed and reopened), the manager refuses to apply\nagainst the new one rather than treating a coincidental match as the original intent."
+      },
+      "FlipPendingRow": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "passes": {
+            "type": "integer",
+            "title": "Passes"
+          },
+          "streak_started_ns": {
+            "type": "integer",
+            "title": "Streak Started Ns"
+          },
+          "last_reason": {
+            "type": "string",
+            "title": "Last Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "strategy_id",
+          "passes",
+          "streak_started_ns",
+          "last_reason"
+        ],
+        "title": "FlipPendingRow",
+        "description": "One wrong-mode leg that has wanted to flip trail \u2192 floor and not, for `passes` consecutive\nprotection passes (#907). `last_reason` is the named refusal that stopped it on the latest pass."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "subsystems": {
+            "items": {
+              "$ref": "#/components/schemas/SubsystemHealth"
+            },
+            "type": "array",
+            "title": "Subsystems"
+          },
+          "bridge_ok": {
+            "type": "boolean",
+            "title": "Bridge Ok",
+            "default": false
+          },
+          "bridge_gaps": {
+            "type": "integer",
+            "title": "Bridge Gaps",
+            "default": 0
+          },
+          "bridge_gap_max_s": {
+            "type": "number",
+            "title": "Bridge Gap Max S",
+            "default": 0.0
+          },
+          "feed_last_tick_ts": {
+            "type": "integer",
+            "title": "Feed Last Tick Ts"
+          },
+          "market_data_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Data Type"
+          },
+          "reconcile_drift": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DriftEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconcile Drift"
+          },
+          "ownership_violations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OwnershipViolation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Violations",
+            "default": []
+          },
+          "flip_pending": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FlipPendingRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flip Pending"
+          },
+          "market_aware": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Aware"
+          },
+          "split_divergence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SplitDivergenceDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lanes_bleeding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LanesBleedingDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "realized_legs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Legs"
+          },
+          "protection_divergence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProtectionDivergence"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protection Divergence"
+          },
+          "naked_after_reject": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Naked After Reject"
+          },
+          "unpriced_positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpriced Positions"
+          },
+          "failed_requests": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Requests"
+          },
+          "subscriptions": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscriptions"
+          },
+          "book_truth": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Truth"
+          },
+          "inferred_fills": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inferred Fills"
+          },
+          "fills_on_terminal_orders": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fills On Terminal Orders"
+          },
+          "fills_on_terminal_orders_dropped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fills On Terminal Orders Dropped"
+          },
+          "shortable": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortable"
+          },
+          "venue_unanswered_lookups": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue Unanswered Lookups"
+          },
+          "observations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observations"
+          },
+          "log_compaction": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Compaction"
+          },
+          "feed_stale": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed Stale"
+          },
+          "armed_lanes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Armed Lanes"
+          },
+          "next_fire_ns": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire Ns"
+          },
+          "lanes_absent": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lanes Absent"
+          },
+          "automated_lanes_registered": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automated Lanes Registered"
+          },
+          "automated_lanes_running": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automated Lanes Running"
+          },
+          "inert": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inert"
+          },
+          "cockpit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cockpit Sha"
+          },
+          "cockpit_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cockpit Digest"
+          },
+          "strategies_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategies Sha"
+          },
+          "strategies_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategies Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "subsystems",
+          "feed_last_tick_ts"
+        ],
+        "title": "HealthResponse",
+        "description": "Connection/health across every system the cockpit depends on (#26).\n\n`status` IS NOT ONLY CONNECTIVITY, and the docstring said it was until #817. It is \"ok\" when all\nsubsystems are up AND the book can be SIZED from \u2014 so an unpriced book (#757), a stale feed, and\na claims/cache split divergence (#817) each degrade it on their own. The api process answers\neither way. `subsystems` are probed live each request: redis + postgres directly, engine via its\nhealth frames (the api can't reach the engine across the #20 split). `feed_last_tick_ts` = the\nnewest `ts_init` a live data handler saw, monotonic (#917) \u2014 the UI ages it (market-hours aware) to tell a live\nfeed from a dead one."
+      },
+      "InstrumentMatch": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "venue": {
+            "type": "string",
+            "title": "Venue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "venue"
+        ],
+        "title": "InstrumentMatch",
+        "description": "One ranked hit from the instrument-search catalog. Flat, JSON-native (crosses REST \u2192 TS client)."
+      },
+      "InstrumentSearchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentMatch"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "InstrumentSearchResponse",
+        "description": "Ranked instrument-search results, best first, capped at the request's `limit`."
+      },
+      "LaneBleedDTO": {
+        "properties": {
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "venue_exits": {
+            "type": "integer",
+            "title": "Venue Exits"
+          },
+          "own_entries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own Entries"
+          },
+          "no_decision_sessions": {
+            "type": "integer",
+            "title": "No Decision Sessions"
+          },
+          "since": {
+            "type": "string",
+            "title": "Since"
+          },
+          "blocked": {
+            "type": "string",
+            "title": "Blocked"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy_id",
+          "venue_exits",
+          "own_entries",
+          "no_decision_sessions",
+          "since",
+          "blocked",
+          "line"
+        ],
+        "title": "LaneBleedDTO",
+        "description": "One lane going to cash under a TRADING label (#1098): NO DECISION for `no_decision_sessions`\nsessions while `venue_exits` protective stop-outs shrank its book and it entered nothing."
+      },
+      "LanesBleedingDTO": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "lanes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LaneBleedDTO"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lanes"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "LanesBleedingDTO",
+        "description": "THREE STATES (#1098, lead's scope): `lanes == []` with `status == \"ok\"` means the journal was\nread and no lane bleeds; `status == \"unreadable\"` carries `lanes: None` and the error \u2014 a failed\nread is never an empty list, and never moves the banner by itself."
+      },
+      "LiquidateLaneRequest": {
+        "properties": {
+          "expected_positions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Positions"
+          },
+          "expected_total_qty": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Expected Total Qty"
+          },
+          "invoked_by": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Invoked By"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_positions",
+          "expected_total_qty",
+          "invoked_by",
+          "reason"
+        ],
+        "title": "LiquidateLaneRequest",
+        "description": "`POST /strategies/{strategy_id}/liquidate` body (#922) \u2014 flatten a LANE's whole book, now.\n\n`expected_positions` / `expected_total_qty` are the leash: what the caller SAW. The engine takes ONE\nsnapshot of the lane's open positions, refuses if it disagrees, and sweeps exactly that snapshot.\n`invoked_by` and `reason` are provenance and are required \u2014 this is the one command that can flatten a\nlane deliberately, and \"why is MOMENTUM flat\" must not be archaeology. Outside regular hours the engine\nwrites LIQUIDATING and submits nothing (`deferred_to_next_open`); invoke again in hours."
+      },
+      "ManagerDTO": {
+        "properties": {
+          "manager_id": {
+            "type": "string",
+            "title": "Manager Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "cycle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Id"
+          },
+          "leash": {
+            "type": "string",
+            "enum": [
+              "AUTO",
+              "CONFIRM",
+              "ALERT"
+            ],
+            "title": "Leash"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ARMED",
+              "PROPOSED",
+              "APPROVED",
+              "APPLYING",
+              "APPLIED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "State"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "manager_id",
+          "kind",
+          "instrument_id",
+          "strategy_id",
+          "leash",
+          "state",
+          "params"
+        ],
+        "title": "ManagerDTO",
+        "description": "One manager instance (#55) and how far it's got. Read directly from Postgres \u2014 the ack for the\noriginal attach command expires long before an overnight manager fires, so a screen re-opened hours\nlater can't rely on it."
+      },
+      "ManagersResponse": {
+        "properties": {
+          "managers": {
+            "items": {
+              "$ref": "#/components/schemas/ManagerDTO"
+            },
+            "type": "array",
+            "title": "Managers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "managers"
+        ],
+        "title": "ManagersResponse",
+        "description": "REST `GET /managers` payload."
+      },
+      "ModifyOrderRequest": {
+        "properties": {
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "trigger_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Price"
+          }
+        },
+        "type": "object",
+        "title": "ModifyOrderRequest",
+        "description": "PATCH an existing working order \u2192 a `modify_order` command. All fields optional; only the provided\nones change (Nautilus keeps the rest). Fail-closed: provided values must be > 0, and at least one\nfield must be set (an empty modify is a no-op that should never reach the engine)."
+      },
+      "NetTerms": {
+        "properties": {
+          "mv_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mv Base"
+          },
+          "invested": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested"
+          },
+          "partial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial"
+          }
+        },
+        "type": "object",
+        "title": "NetTerms",
+        "description": "The two terms the tile subtracts from a lane's live market value (#699 a), and the NAMED reason\nthe window is partial. A None term is UNKNOWN \u2014 the tile draws an em dash, never a zero."
+      },
+      "OrderDTO": {
+        "properties": {
+          "client_order_id": {
+            "type": "string",
+            "title": "Client Order Id"
+          },
+          "venue_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue Order Id"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "order_type": {
+            "type": "string",
+            "title": "Order Type"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "filled_qty": {
+            "type": "number",
+            "title": "Filled Qty"
+          },
+          "leaves_qty": {
+            "type": "number",
+            "title": "Leaves Qty"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "trigger_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Price"
+          },
+          "time_in_force": {
+            "type": "string",
+            "title": "Time In Force"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "avg_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Px"
+          },
+          "ts_last": {
+            "type": "integer",
+            "title": "Ts Last"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_order_id",
+          "instrument_id",
+          "side",
+          "order_type",
+          "quantity",
+          "filled_qty",
+          "leaves_qty",
+          "time_in_force",
+          "status",
+          "ts_last",
+          "strategy_id"
+        ],
+        "title": "OrderDTO",
+        "description": "A working/terminal order snapshot for the Orders blotter (#33). Mirrors engine `_order_frame`.\n`trigger_price` is set only on stop-type orders; `avg_px` is null until a fill."
+      },
+      "OrderRequest": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "order_type": {
+            "type": "string",
+            "title": "Order Type"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "trigger_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Price"
+          },
+          "time_in_force": {
+            "type": "string",
+            "title": "Time In Force",
+            "default": "day"
+          },
+          "extended_hours": {
+            "type": "boolean",
+            "title": "Extended Hours",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "side",
+          "quantity",
+          "order_type"
+        ],
+        "title": "OrderRequest",
+        "description": "A discretionary order from the cockpit \u2192 a `submit_order` command. Placed only when the engine is\narmed (KUMO_ORDERS_ARMED); the api generates the client_order_id (idempotency key)."
+      },
+      "OrdersResponse": {
+        "properties": {
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/OrderDTO"
+            },
+            "type": "array",
+            "title": "Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orders"
+        ],
+        "title": "OrdersResponse",
+        "description": "REST `GET /orders` payload \u2014 the Orders blotter (working + recent terminal)."
+      },
+      "OwnershipViolation": {
+        "properties": {
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "signed_qty": {
+            "type": "number",
+            "title": "Signed Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strategy_id",
+          "instrument_id",
+          "signed_qty"
+        ],
+        "title": "OwnershipViolation",
+        "description": "One lane holding a quantity it is not permitted to hold (#437).\n\nDELIBERATELY NOT A `DriftEntry`. Drift compares the broker against the cache and its remedy is\n\"trust the broker's number\". Here the broker AGREES with the netted cache \u2014 on 2026-08-30 eight\nmirrored shorts netted to exactly what the broker held, so `reconcile_drift` was correctly empty\nfor nine days \u2014 and the remedy is the opposite: trust NEITHER lane figure until ownership is\nreconciled. Same file, same response, different claim; folding it into drift would make the\nbanner mean less rather than more. Sits beside `reconcile_drift` for the reason\n`unreconciled_orders` does: a book can be perfectly reconciled and still be mis-attributed."
+      },
+      "PoolEntryDTO": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta"
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held"
+          },
+          "override": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pin",
+                  "exclude"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "sources",
+          "provenance",
+          "held"
+        ],
+        "title": "PoolEntryDTO",
+        "description": "One symbol the strategy can rank \u2014 or one it is deliberately blocked from ranking."
+      },
+      "PoolOverrideRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pin",
+              "exclude"
+            ],
+            "title": "Kind"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "kind"
+        ],
+        "title": "PoolOverrideRequest",
+        "description": "POST /pool/override \u2014 pin keeps a symbol rankable, exclude blocks and liquidates it."
+      },
+      "PoolResponse": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "symbols": {
+            "items": {
+              "$ref": "#/components/schemas/PoolEntryDTO"
+            },
+            "type": "array",
+            "title": "Symbols"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/PoolSourceDTO"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "symbols",
+          "sources"
+        ],
+        "title": "PoolResponse"
+      },
+      "PoolSourceDTO": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "symbol_count": {
+            "type": "integer",
+            "title": "Symbol Count"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "symbol_count",
+          "stale"
+        ],
+        "title": "PoolSourceDTO",
+        "description": "Per-source freshness. A failed source is a HARD BLOCK on deciding, not a cosmetic warning."
+      },
+      "PoolSourceRefreshRequest": {
+        "properties": {
+          "symbols": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              }
+            ],
+            "title": "Symbols",
+            "default": []
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "create": {
+            "type": "boolean",
+            "title": "Create",
+            "default": false
+          },
+          "allow_shrink": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Shrink"
+          }
+        },
+        "type": "object",
+        "title": "PoolSourceRefreshRequest",
+        "description": "A source's WHOLE symbol set, replacing whatever it held.\n\n`symbols` may be a bare list (`meta` defaults to `{}` per symbol \u2014 the `my_watchlist` shape) or a\nmapping of symbol to meta (`ledger_book` carries `opened`/`days_held`).\n\n`allow_shrink` is a REASON and not a flag. A refresh losing more than half the previous set is\nrefused, because a truncated feed must not liquidate a book \u2014 but a followed trader genuinely\ngoing flat is the most significant thing this source can say, and a rule with no escape gets\nbypassed rather than obeyed. The reason is recorded, so an unexplained collapse and a justified\none do not read the same afterwards.\n\n`create` must be ASKED FOR. A refresh naming a source that does not exist is refused by default,\nbecause a typo would otherwise produce a source that is fresh, real and feeds nothing while the one\nit was meant to refresh ages into a hard block on deciding. Seeding a NEW instance is the case that\nneeds it \u2014 ibkr-paper-retired could not seed its empty pool at all \u2014 and saying so is one field rather\nthan a second endpoint."
+      },
+      "PositionDTO": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "avg_px_open": {
+            "type": "number",
+            "title": "Avg Px Open"
+          },
+          "realized_pnl": {
+            "type": "string",
+            "title": "Realized Pnl"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "ts_last": {
+            "type": "integer",
+            "title": "Ts Last",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "side",
+          "quantity",
+          "avg_px_open",
+          "realized_pnl",
+          "strategy_id"
+        ],
+        "title": "PositionDTO",
+        "description": "A single open/closed position read from the Nautilus cache."
+      },
+      "PositionsResponse": {
+        "properties": {
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PositionDTO"
+            },
+            "type": "array",
+            "title": "Positions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "positions"
+        ],
+        "title": "PositionsResponse",
+        "description": "REST `GET /positions` payload."
+      },
+      "ProtectionDivergence": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "coids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Coids"
+          },
+          "cache_holds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cache Holds",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "coids"
+        ],
+        "title": "ProtectionDivergence",
+        "description": "One instrument where the broker holds resting protective orders the cache does not know about.\n\n`cache_holds` carries what the cache believes about those exact ids (e.g. `COID=REJECTED`) rather\nthan a count, because the difference between \"the cache never saw it\" and \"the cache marked it\nREJECTED\" is the difference between an adoption gap and the 2026-08-22 outage."
+      },
+      "SnapshotData": {
+        "properties": {
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/BarDTO"
+            },
+            "type": "array",
+            "title": "Bars"
+          },
+          "fills": {
+            "items": {
+              "$ref": "#/components/schemas/FillDTO"
+            },
+            "type": "array",
+            "title": "Fills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bars",
+          "fills"
+        ],
+        "title": "SnapshotData",
+        "description": "Full bar/fill history for every instrument \u2014 sent once on WS connect."
+      },
+      "SnapshotMessage": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "snapshot",
+            "title": "Type",
+            "default": "snapshot"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SnapshotData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SnapshotMessage"
+      },
+      "SplitDivergenceDTO": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/SplitDivergencePair"
+            },
+            "type": "array",
+            "title": "Pairs",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SplitDivergenceDTO",
+        "description": "The split-divergence surface, with its own status (#817).\n\nTHREE STATES, and the middle one is why the status exists: `pairs == []` with `status == \"ok\"`\nmeans \"computed, none found\"; a non-ok status means a half could not be read and NOTHING was\ncomputed. An empty list without a status is a claim of health about a book nobody looked at \u2014\nthe shape that let eleven pairs stand on ibkr-paper."
+      },
+      "SplitDivergencePair": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "claim": {
+            "type": "number",
+            "title": "Claim"
+          },
+          "cache": {
+            "type": "number",
+            "title": "Cache"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "strategy_id",
+          "claim",
+          "cache"
+        ],
+        "title": "SplitDivergencePair",
+        "description": "One (strategy, symbol) where the claims ledger and the engine cache disagree (#817).\n\nBoth numbers are carried, never a delta: \"BCTROT-004 claims 46, cache attributes 10\" tells an\noperator which side to trust and by how much, and a single signed difference does not."
+      },
+      "StatusMessage": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "status",
+            "title": "Type",
+            "default": "status"
+          },
+          "data": {
+            "type": "string",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "StatusMessage"
+      },
+      "SubsystemHealth": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "ok"
+        ],
+        "title": "SubsystemHealth",
+        "description": "One dependency's live connectivity. `name` = redis | postgres | engine; `detail` carries the error\nwhen down (empty when ok)."
+      },
+      "TradeDTO": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "strategy_id": {
+            "type": "string",
+            "title": "Strategy Id"
+          },
+          "cycle_id": {
+            "type": "string",
+            "title": "Cycle Id"
+          },
+          "manager_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "HELD",
+              "ARMED",
+              "WATCH",
+              "CLOSED"
+            ],
+            "title": "State"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "is_capital_deployed": {
+            "type": "boolean",
+            "title": "Is Capital Deployed"
+          },
+          "is_engaged": {
+            "type": "boolean",
+            "title": "Is Engaged"
+          },
+          "avg_px_open": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Px Open"
+          },
+          "realized_pnl": {
+            "type": "string",
+            "title": "Realized Pnl"
+          },
+          "last_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Px"
+          },
+          "market_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Value"
+          },
+          "unrealized_pl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Pl"
+          },
+          "unrealized_plpc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealized Plpc"
+          },
+          "leg_count": {
+            "type": "integer",
+            "title": "Leg Count"
+          },
+          "opened_ts": {
+            "type": "integer",
+            "title": "Opened Ts"
+          },
+          "closed_ts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Ts"
+          },
+          "last_event_ts": {
+            "type": "integer",
+            "title": "Last Event Ts"
+          },
+          "working_orders": {
+            "items": {
+              "$ref": "#/components/schemas/WorkingOrderDTO"
+            },
+            "type": "array",
+            "title": "Working Orders",
+            "default": []
+          },
+          "broker_protected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Protected"
+          },
+          "venue_avg_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue Avg Px"
+          },
+          "basis_contested": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Contested"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "client_id",
+          "instrument_id",
+          "strategy_id",
+          "cycle_id",
+          "state",
+          "side",
+          "quantity",
+          "is_capital_deployed",
+          "is_engaged",
+          "realized_pnl",
+          "leg_count",
+          "opened_ts",
+          "last_event_ts"
+        ],
+        "title": "TradeDTO",
+        "description": "A trade CYCLE (#73) \u2014 the engine projection over native Nautilus positions + snapshots + working orders,\nNOT a parallel ledger. Lifetime = open\u2192closed spanning intra-cycle flats. Carries the ADR canonical identity\n`(account_id, client_id, instrument_id, strategy_id, cycle_id)` from round 1 so the UI never keys off the\nnative position_id (a strategy key, reused across cycles). `cycle_id` is OPAQUE \u2014 do not parse it.\n\nP&L is native: `realized_pnl` = \u03a3(closed snapshot legs' realized) + current leg's realized. `avg_px_open`\nis the CURRENT leg only (null while flat). `manager_id` is nullable (no managers in v0)."
+      },
+      "TradesResponse": {
+        "properties": {
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/TradeDTO"
+            },
+            "type": "array",
+            "title": "Trades"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "realized_session": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Session"
+          },
+          "realized_periods": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Periods"
+          },
+          "realized_periods_swept": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Periods Swept"
+          },
+          "realized_legs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Legs"
+          },
+          "lane_flows": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane Flows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trades"
+        ],
+        "title": "TradesResponse",
+        "description": "REST `GET /trades` payload \u2014 the trade-cycle plane (#73)."
+      },
+      "TransferDTO": {
+        "properties": {
+          "transfer_id": {
+            "type": "string",
+            "title": "Transfer Id"
+          },
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "source_strategy_id": {
+            "type": "string",
+            "title": "Source Strategy Id"
+          },
+          "target_strategy_id": {
+            "type": "string",
+            "title": "Target Strategy Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "pricing_mode": {
+            "type": "string",
+            "enum": [
+              "MARKET",
+              "CARRY_OVER"
+            ],
+            "title": "Pricing Mode"
+          },
+          "transfer_px": {
+            "type": "number",
+            "title": "Transfer Px"
+          },
+          "source_avg_px": {
+            "type": "number",
+            "title": "Source Avg Px"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PREPARED",
+              "SOURCE_APPLIED",
+              "DEST_APPLIED",
+              "COMPLETED",
+              "FAILED"
+            ],
+            "title": "State"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transfer_id",
+          "instrument_id",
+          "source_strategy_id",
+          "target_strategy_id",
+          "side",
+          "quantity",
+          "pricing_mode",
+          "transfer_px",
+          "source_avg_px",
+          "state",
+          "reason_code"
+        ],
+        "title": "TransferDTO",
+        "description": "One internal position transfer (#80 spin-off) and how far it got.\n\nA transfer MOVES quantity between strategies with paired internal fills \u2014 no order reaches the venue and\nthe broker net is unchanged. `state` is the outbox progress; anything other than COMPLETED/FAILED means a\ntransfer is still in flight or was interrupted and awaits recovery."
+      },
+      "TransferRequestBody": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          },
+          "target_strategy_id": {
+            "type": "string",
+            "title": "Target Strategy Id"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side",
+            "default": "LONG"
+          },
+          "source_strategy_id": {
+            "type": "string",
+            "title": "Source Strategy Id",
+            "default": "EXTERNAL"
+          },
+          "pricing_mode": {
+            "type": "string",
+            "enum": [
+              "MARKET",
+              "CARRY_OVER"
+            ],
+            "title": "Pricing Mode",
+            "default": "CARRY_OVER"
+          },
+          "reason_code": {
+            "type": "string",
+            "title": "Reason Code",
+            "default": "unspecified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id",
+          "target_strategy_id",
+          "quantity"
+        ],
+        "title": "TransferRequestBody",
+        "description": "`POST /transfers` body.\n\nNo price field on purpose: the engine sources it. Whoever picks the price picks which strategy keeps the\nP&L, so an operator-supplied price would make transfers a P&L-shifting tool. `actor` is likewise stamped\nserver-side."
+      },
+      "TransfersResponse": {
+        "properties": {
+          "transfers": {
+            "items": {
+              "$ref": "#/components/schemas/TransferDTO"
+            },
+            "type": "array",
+            "title": "Transfers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transfers"
+        ],
+        "title": "TransfersResponse",
+        "description": "REST `GET /transfers` payload."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WatchlistAdd": {
+        "properties": {
+          "instrument_id": {
+            "type": "string",
+            "title": "Instrument Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "instrument_id"
+        ],
+        "title": "WatchlistAdd",
+        "description": "POST /watchlist body \u2014 the instrument to add (canonical TICKER.MIC)."
+      },
+      "WatchlistResponse": {
+        "properties": {
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Symbols"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbols"
+        ],
+        "title": "WatchlistResponse",
+        "description": "The current watchlist \u2014 instrument ids, oldest-added first."
+      },
+      "WindowBaseResponse": {
+        "properties": {
+          "by_period": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "By Period"
+          },
+          "market_value": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Market Value",
+            "default": {}
+          },
+          "net": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/NetTerms"
+                  },
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Net",
+            "default": {}
+          },
+          "base_date": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Base Date",
+            "default": {}
+          },
+          "unreadable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unreadable",
+            "default": []
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by_period"
+        ],
+        "title": "WindowBaseResponse",
+        "description": "What each lane held at each window's START, so the tile can render a per-lane DELTA (#699).\n\n`by_period` maps every period to a `{strategy_id: unrealized}` map, or NULL. Every period is\npresent: an absent KEY is indistinguishable from a serialisation fault, while an explicit null is\na statement the tile can render an em dash for and an operator can trust.\n\n`unreadable` names base dates whose read FAILED, which is a THIRD state and not a variant of the\nother two. A period with no base (`all`) and a base day nobody captured are both gaps; a database\nthat would not answer is an outage. All three render the same em dash, and only this field makes\nthe difference recoverable \u2014 without it, an outage is reported as \"no data for that window\" and\nnobody ever acts on it."
+      },
+      "WorkingOrderDTO": {
+        "properties": {
+          "client_order_id": {
+            "type": "string",
+            "title": "Client Order Id"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side"
+          },
+          "order_type": {
+            "type": "string",
+            "title": "Order Type"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "leaves_qty": {
+            "type": "number",
+            "title": "Leaves Qty"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "trigger_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Price"
+          },
+          "time_in_force": {
+            "type": "string",
+            "title": "Time In Force"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "ts_last": {
+            "type": "integer",
+            "title": "Ts Last"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_order_id",
+          "side",
+          "order_type",
+          "quantity",
+          "leaves_qty",
+          "time_in_force",
+          "status",
+          "ts_last"
+        ],
+        "title": "WorkingOrderDTO",
+        "description": "A live working order attached to a trade cycle (an ARMED entry/re-entry, or a protective leg). A small\nsummary \u2014 the Orders blotter (#33) carries the full OrderDTO; this is what the cycle surface needs."
+      }
+    }
+  }
+}
